@@ -21,15 +21,8 @@ export default {
 			return handleSecretKeyEndpoint(request, env);
 		}
 
-		// その他のルート
-		switch (url.pathname) {
-			case '/message':
-				return new Response('Hello, World!');
-			case '/random':
-				return new Response(crypto.randomUUID());
-			default:
-				return new Response('Not Found', { status: 404 });
-		}
+		// その他のルート - 404
+		return new Response('Not Found', { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;
 

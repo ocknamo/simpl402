@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,7 +7,7 @@
 		<style>
 			body {
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-				max-width: 900px;
+				max-width: 800px;
 				margin: 0 auto;
 				padding: 2rem;
 				line-height: 1.6;
@@ -40,9 +40,6 @@
 				border-left: 4px solid #4caf50;
 				margin: 1rem 0;
 			}
-			.lang-section {
-				margin-bottom: 3rem;
-			}
 			.status-badge {
 				display: inline-block;
 				padding: 0.2rem 0.6rem;
@@ -68,134 +65,59 @@
 		</style>
 	</head>
 	<body>
-		<div class="lang-section">
-			<h1>⚡ x402 over Lightning Network - Nostr API</h1>
-			
-			<p>
-				This is a REST API implementation that requires Lightning Network payment to access protected resources.
-				It follows the x402 protocol specification.
-			</p>
+		<h1>⚡ x402 over Lightning Network - Nostr API</h1>
+		
+		<p>
+			Lightning Network による支払いが必要な REST API です。x402 プロトコルに準拠しています。
+		</p>
 
-			<h2>🔌 API Endpoint</h2>
-			
-			<div class="endpoint">
-				<strong>GET /nostr/secret-key</strong>
-				<p>Returns a Nostr secret key after Lightning payment verification.</p>
-			</div>
-
-			<h2>🔄 How It Works</h2>
-			
-			<h3>Step 1: Initial Request <span class="status-badge status-402">402 Payment Required</span></h3>
-			<pre><code>curl -i http://localhost:8787/nostr/secret-key</code></pre>
-			<p>Response includes a <code>PAYMENT-REQUIRED</code> header with a Base64-encoded Lightning invoice:</p>
-			<pre><code>HTTP/1.1 402 Payment Required
-PAYMENT-REQUIRED: eyJzY2hlbWUiOiJsaWdodG5pbmciLCJuZXR3b3JrIjoiYml0Y29pbiIsImludm9pY2UiOiJsbmJjMS4uLiJ9</code></pre>
-
-			<h3>Step 2: Decode the Invoice</h3>
-			<pre><code>echo "eyJ..." | base64 -d | jq</code></pre>
-			<p>Returns:</p>
-			<pre><code>{
-  "scheme": "lightning",
-  "network": "bitcoin",
-  "invoice": "lnbc1u1p5..."
-}</code></pre>
-
-			<h3>Step 3: Pay the Invoice</h3>
-			<p>Use your Lightning wallet to pay the invoice (100 sats).</p>
-
-			<h3>Step 4: Access with Payment Signature <span class="status-badge status-200">200 OK</span></h3>
-			<pre><code>curl -i http://localhost:8787/nostr/secret-key \
-  -H "PAYMENT-SIGNATURE: eyJ..."</code></pre>
-			<p>Response:</p>
-			<pre><code>HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "secretKey": "nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-}</code></pre>
-
-			<h2>🔒 Security Features</h2>
-			<ul>
-				<li><strong>One-time use:</strong> Each invoice can only be used once</li>
-				<li><strong>Expiration:</strong> Invoices expire after 1 hour</li>
-				<li><strong>Payment verification:</strong> Verified through coinos.io Lightning node</li>
-			</ul>
-
-			<h2>🛠️ Technology Stack</h2>
-			<ul>
-				<li>Cloudflare Workers (Serverless)</li>
-				<li>Lightning Network (coinos.io API)</li>
-				<li>Cloudflare KV (Invoice tracking)</li>
-				<li>TypeScript</li>
-			</ul>
+		<h2>🔌 API エンドポイント</h2>
+		
+		<div class="endpoint">
+			<strong>GET /nostr/secret-key</strong>
+			<p>Lightning 支払い検証後に Nostr の秘密鍵を返します。</p>
 		</div>
 
-		<hr style="margin: 3rem 0; border: none; border-top: 2px solid #ddd;">
+		<h2>🔄 使い方</h2>
+		
+		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
+		<pre><code>curl -i http://localhost:8787/nostr/secret-key</code></pre>
+		<p>レスポンスに Base64 エンコードされた Lightning invoice を含む <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
 
-		<div class="lang-section">
-			<h1>⚡ x402 over Lightning Network - Nostr API</h1>
-			
-			<p>
-				Lightning Network による支払いが必要な REST API の実装です。
-				x402 プロトコル仕様に準拠しています。
-			</p>
-
-			<h2>🔌 API エンドポイント</h2>
-			
-			<div class="endpoint">
-				<strong>GET /nostr/secret-key</strong>
-				<p>Lightning 支払い検証後に Nostr の秘密鍵を返します。</p>
-			</div>
-
-			<h2>🔄 動作の流れ</h2>
-			
-			<h3>ステップ 1: 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
-			<pre><code>curl -i http://localhost:8787/nostr/secret-key</code></pre>
-			<p>レスポンスには Base64 エンコードされた Lightning invoice を含む <code>PAYMENT-REQUIRED</code> ヘッダーが含まれます：</p>
-			<pre><code>HTTP/1.1 402 Payment Required
-PAYMENT-REQUIRED: eyJzY2hlbWUiOiJsaWdodG5pbmciLCJuZXR3b3JrIjoiYml0Y29pbiIsImludm9pY2UiOiJsbmJjMS4uLiJ9</code></pre>
-
-			<h3>ステップ 2: Invoice のデコード</h3>
-			<pre><code>echo "eyJ..." | base64 -d | jq</code></pre>
-			<p>結果：</p>
-			<pre><code>{
+		<h3>2. Invoice のデコード</h3>
+		<pre><code>echo "eyJ..." | base64 -d | jq</code></pre>
+		<p>結果：</p>
+		<pre><code>{
   "scheme": "lightning",
   "network": "bitcoin",
-  "invoice": "lnbc1u1p5..."
+  "invoice": "lnbc1..."
 }</code></pre>
 
-			<h3>ステップ 3: Invoice の支払い</h3>
-			<p>Lightning ウォレットを使用して invoice を支払います（100 sats）。</p>
+		<h3>3. Invoice の支払い</h3>
+		<p>Lightning ウォレットで invoice を支払います（デフォルト: 100 sats）。</p>
 
-			<h3>ステップ 4: 支払い署名でアクセス <span class="status-badge status-200">200 OK</span></h3>
-			<pre><code>curl -i http://localhost:8787/nostr/secret-key \
+		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
+		<pre><code>curl -i http://localhost:8787/nostr/secret-key \
   -H "PAYMENT-SIGNATURE: eyJ..."</code></pre>
-			<p>レスポンス：</p>
-			<pre><code>HTTP/1.1 200 OK
-Content-Type: application/json
+		<p>支払い検証後、秘密鍵が返されます。</p>
 
-{
-  "secretKey": "nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-}</code></pre>
+		<h2>🔒 セキュリティ</h2>
+		<ul>
+			<li>各 invoice は一度のみ使用可能（Cloudflare KV で管理）</li>
+			<li>期限切れ invoice は自動的に拒否</li>
+			<li>coinos.io Lightning ノードで支払い検証</li>
+		</ul>
 
-			<h2>🔒 セキュリティ機能</h2>
-			<ul>
-				<li><strong>一度のみ使用可能:</strong> 各 invoice は一度しか使用できません</li>
-				<li><strong>有効期限:</strong> Invoice は 1 時間後に期限切れになります</li>
-				<li><strong>支払い検証:</strong> coinos.io Lightning ノードで検証されます</li>
-			</ul>
-
-			<h2>🛠️ 技術スタック</h2>
-			<ul>
-				<li>Cloudflare Workers（サーバーレス）</li>
-				<li>Lightning Network（coinos.io API）</li>
-				<li>Cloudflare KV（Invoice 追跡）</li>
-				<li>TypeScript</li>
-			</ul>
-		</div>
+		<h2>🛠️ 技術スタック</h2>
+		<ul>
+			<li>Cloudflare Workers（サーバーレス）</li>
+			<li>Lightning Network（coinos.io API）</li>
+			<li>Cloudflare KV（使用済み invoice 追跡）</li>
+			<li>TypeScript</li>
+		</ul>
 
 		<footer>
-			<p>Built with ⚡ Lightning Network | <a href="https://github.com" target="_blank">View on GitHub</a></p>
+			<p>Built with ⚡ Lightning Network</p>
 		</footer>
 	</body>
 </html>

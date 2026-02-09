@@ -1,6 +1,7 @@
 {
 	"name": "nostr-api",
 	"version": "0.0.0",
+	"description": "x402 over Lightning Network - Cloudflare Workers implementation compliant with x402 HTTP Transport Specification v2",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",

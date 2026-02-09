@@ -1,5 +1,6 @@
 /**
  * x402 over Lightning Network - Cloudflare Workers Implementation
+ * Fully compliant with x402 HTTP Transport Specification v2
  *
  * - Run `npm run dev` in your terminal to start a development server
  * - Open a browser tab at http://localhost:8787/ to see your worker in action
@@ -9,8 +10,16 @@
  */
 
 import { createInvoice, verifyPayment, decodeBolt11 } from './lightning';
-import { encodeBase64, decodeBase64 } from './utils';
-import type { PaymentRequired, PaymentSignature } from './types';
+import {
+	encodeBase64,
+	decodeBase64,
+	createResourceFromRequest,
+	createLightningPaymentMethod,
+	createPaymentRequired,
+	createSuccessSettlement,
+	createFailureSettlement,
+} from './utils';
+import type { X402PaymentPayload, X402SettlementResponse, LightningPaymentPayload } from './types';
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
@@ -27,39 +36,69 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 /**
+ * Create error response with x402 headers
+ */
+function createErrorResponse(message: string, status: number, errorReason: string, request?: Request): Response {
+	const settlementResponse = createFailureSettlement(errorReason);
+
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
+	};
+
+	return new Response(JSON.stringify({ error: message }), {
+		status,
+		headers,
+	});
+}
+
+/**
  * Handle /nostr/secret-key endpoint with x402 payment protection
  */
 async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Response> {
 	const paymentSigHeader = request.headers.get('PAYMENT-SIGNATURE');
 
-	// No payment signature - require payment
+	// No payment signature - require payment (402)
 	if (!paymentSigHeader) {
-		return requirePayment(env);
+		return requirePayment(request, env);
 	}
 
 	// Payment signature provided - verify payment
 	try {
-		const paymentSig = decodeBase64<PaymentSignature>(paymentSigHeader);
+		const paymentPayload = decodeBase64<X402PaymentPayload>(paymentSigHeader);
 
-		// Validate signature structure
-		if (paymentSig.scheme !== 'lightning' || paymentSig.network !== 'bitcoin' || !paymentSig.invoice) {
-			return new Response('Invalid payment signature', { status: 400 });
+		// Validate x402 version
+		if (paymentPayload.x402Version !== 2) {
+			return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
 		}
 
-		// Decode invoice to get payment hash
-		const decoded = decodeBolt11(paymentSig.invoice);
+		// Validate payment method is Lightning
+		if (paymentPayload.accepted.scheme !== 'lightning') {
+			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
+		}
+
+		// Extract Lightning-specific payload
+		const lightningPayload = paymentPayload.payload as unknown as LightningPaymentPayload;
+		const invoice = lightningPayload.invoice;
+
+		if (!invoice) {
+			return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
+		}
+
+		// Decode invoice to get payment hash for dedup
+		const decoded = decodeBolt11(invoice);
 
 		// Check if invoice is expired
 		const now = Math.floor(Date.now() / 1000);
 		if (decoded.timeExpireDate < now) {
-			return new Response('Invoice expired', { status: 402 });
+			return createErrorResponse('Invoice expired', 402, 'invoice_expired');
 		}
 
 		// Check if invoice has already been used
 		const usedKey = `used:${decoded.paymentHash}`;
 		const alreadyUsed = await env.USED_INVOICES.get(usedKey);
 		if (alreadyUsed) {
-			return new Response('Invoice already used', { status: 402 });
+			return createErrorResponse('Invoice already used', 402, 'invoice_already_used');
 		}
 
 		// Verify payment with Lightning node
@@ -68,7 +107,7 @@ async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Resp
 			return new Response('Server configuration error: API key not set', { status: 500 });
 		}
 
-		console.log('[DEBUG] Verifying payment for invoice:', paymentSig.invoice.substring(0, 50) + '...');
+		console.log('[DEBUG] Verifying payment for invoice:', invoice.substring(0, 50) + '...');
 		console.log('[DEBUG] Invoice details:', {
 			paymentHash: decoded.paymentHash,
 			satoshis: decoded.satoshis,
@@ -77,18 +116,29 @@ async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Resp
 			currentTime: now,
 		});
 
-		const isPaid = await verifyPayment(env.COINOS_API_URL, apiKey, paymentSig.invoice);
+		const isPaid = await verifyPayment(env.COINOS_API_URL, apiKey, invoice);
 
 		console.log('[DEBUG] Payment verification result:', isPaid);
 
 		if (!isPaid) {
-			return new Response('Payment not confirmed', { status: 402 });
+			// Payment not confirmed - return 402 with PAYMENT-RESPONSE
+			const settlementResponse = createFailureSettlement('payment_not_confirmed');
+
+			return new Response(JSON.stringify({ error: 'Payment not confirmed' }), {
+				status: 402,
+				headers: {
+					'Content-Type': 'application/json',
+					'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
+				},
+			});
 		}
 
 		// Mark invoice as used (TTL: 24 hours)
 		await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
 
-		// Payment verified - return the secret key
+		// Payment verified - return the secret key with PAYMENT-RESPONSE header
+		const settlementResponse = createSuccessSettlement(invoice);
+
 		const response = {
 			secretKey: 'nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
 		};
@@ -97,18 +147,19 @@ async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Resp
 			status: 200,
 			headers: {
 				'Content-Type': 'application/json',
+				'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
 			},
 		});
 	} catch (error) {
 		console.error('Payment verification error:', error);
-		return new Response('Invalid payment signature', { status: 400 });
+		return createErrorResponse('Invalid payment signature', 400, 'invalid_payload');
 	}
 }
 
 /**
- * Return 402 Payment Required response with Lightning invoice
+ * Return 402 Payment Required response with x402 v2 headers
  */
-async function requirePayment(env: Env): Promise<Response> {
+async function requirePayment(request: Request, env: Env): Promise<Response> {
 	try {
 		const apiKey = env.COINOS_API_KEY;
 		if (!apiKey) {
@@ -116,22 +167,20 @@ async function requirePayment(env: Env): Promise<Response> {
 		}
 
 		// Create Lightning invoice
-		const invoiceData = await createInvoice(
-			env.COINOS_API_URL,
-			apiKey,
-			parseInt(env.INVOICE_AMOUNT_SATS),
-			parseInt(env.INVOICE_EXPIRY_SECONDS)
-		);
+		const amountSats = parseInt(env.INVOICE_AMOUNT_SATS);
+		const expirySeconds = parseInt(env.INVOICE_EXPIRY_SECONDS);
 
-		const paymentRequired: PaymentRequired = {
-			scheme: 'lightning',
-			network: 'bitcoin',
-			invoice: invoiceData.text,
-		};
+		const invoiceData = await createInvoice(env.COINOS_API_URL, apiKey, amountSats, expirySeconds);
 
-		return new Response(null, {
+		// Build x402 v2 compliant response
+		const resource = createResourceFromRequest(request);
+		const lightningMethod = createLightningPaymentMethod(invoiceData.text, amountSats, expirySeconds);
+		const paymentRequired = createPaymentRequired(resource, [lightningMethod]);
+
+		return new Response(JSON.stringify({ error: 'Payment required' }), {
 			status: 402,
 			headers: {
+				'Content-Type': 'application/json',
 				'PAYMENT-REQUIRED': encodeBase64(paymentRequired),
 			},
 		});

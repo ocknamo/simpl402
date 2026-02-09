@@ -68,7 +68,7 @@
 		<h1>⚡ x402 over Lightning Network - Nostr API</h1>
 		
 		<p>
-			Lightning Network による支払いが必要な REST API です。x402 プロトコルに準拠しています。
+			Lightning Network による支払いが必要な REST API です。<strong>x402 HTTP Transport Specification v2</strong> に完全準拠しています。
 		</p>
 
 		<h2>🔌 API エンドポイント</h2>
@@ -82,34 +82,70 @@
 		
 		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
 		<pre><code>curl -i http://localhost:8787/nostr/secret-key</code></pre>
-		<p>レスポンスに Base64 エンコードされた Lightning invoice を含む <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
+		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
+		<pre><code>HTTP/1.1 402 Payment Required
+Content-Type: application/json
+PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IHsuLi59LCAiYWNjZXB0cyI6IFt7Li4ufV19
 
-		<h3>2. Invoice のデコード</h3>
-		<pre><code>echo "eyJ..." | base64 -d | jq</code></pre>
-		<p>結果：</p>
+{"error":"Payment required"}</code></pre>
+
+		<h3>2. PAYMENT-REQUIRED のデコード</h3>
+		<pre><code>echo "eyJ4NDAyVmVyc2lvbiI6Mi4uLiJ9" | base64 -d | jq</code></pre>
+		<p>x402 v2 形式のペイロード：</p>
 		<pre><code>{
-  "scheme": "lightning",
-  "network": "bitcoin",
-  "invoice": "lnbc1..."
+  "x402Version": 2,
+  "error": "PAYMENT-SIGNATURE header is required",
+  "resource": {
+    "url": "http://localhost:8787/nostr/secret-key",
+    "description": "Access to Nostr secret key",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "lightning",
+      "network": "bitcoin",
+      "amount": "100000",
+      "asset": "BTC",
+      "maxTimeoutSeconds": 3600,
+      "extra": {
+        "invoice": "lnbc1..."
+      }
+    }
+  ]
 }</code></pre>
 
 		<h3>3. Invoice の支払い</h3>
-		<p>Lightning ウォレットで invoice を支払います（デフォルト: 100 sats）。</p>
+		<p><code>accepts[0].extra.invoice</code> の値を Lightning ウォレットで支払います（デフォルト: 100 sats）。</p>
 
 		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
+		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
 		<pre><code>curl -i http://localhost:8787/nostr/secret-key \
-  -H "PAYMENT-SIGNATURE: eyJ..."</code></pre>
-		<p>支払い検証後、秘密鍵が返されます。</p>
+  -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ=="</code></pre>
+		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共に秘密鍵が返されます：</p>
+		<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Li4ufX0=
+
+{"secretKey":"nsec1..."}</code></pre>
+
+		<h2>📋 x402 v2 ヘッダー</h2>
+		<ul>
+			<li><strong>PAYMENT-REQUIRED</strong>: サーバーが支払い要求を送信（resource、accepts配列を含む）</li>
+			<li><strong>PAYMENT-SIGNATURE</strong>: クライアントが支払い情報を送信（x402Version、resource、accepted、payloadを含む）</li>
+			<li><strong>PAYMENT-RESPONSE</strong>: サーバーが決済結果を返却（success、transaction、errorReasonなどを含む）</li>
+		</ul>
 
 		<h2>🔒 セキュリティ</h2>
 		<ul>
 			<li>各 invoice は一度のみ使用可能（Cloudflare KV で管理）</li>
 			<li>期限切れ invoice は自動的に拒否</li>
 			<li>coinos.io Lightning ノードで支払い検証</li>
+			<li>x402 v2 仕様に完全準拠</li>
 		</ul>
 
 		<h2>🛠️ 技術スタック</h2>
 		<ul>
+			<li>x402 HTTP Transport Specification v2</li>
 			<li>Cloudflare Workers（サーバーレス）</li>
 			<li>Lightning Network（coinos.io API）</li>
 			<li>Cloudflare KV（使用済み invoice 追跡）</li>

@@ -81,7 +81,7 @@
 		<h2>使い方</h2>
 		
 		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
-		<pre><code>curl -i http://localhost:8787/nostr/secret-key</code></pre>
+		<pre><code>curl -i https://nostr.ocknamo.com/nostr/secret-key</code></pre>
 		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
 		<pre><code>HTTP/1.1 402 Payment Required
 Content-Type: application/json
@@ -95,8 +95,8 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
 		<pre><code>{
   "x402Version": 2,
   "error": "PAYMENT-SIGNATURE header is required",
-  "resource": {
-    "url": "http://localhost:8787/nostr/secret-key",
+			"resource": {
+				"url": "https://nostr.ocknamo.com/nostr/secret-key",
     "description": "Access to Nostr secret key",
     "mimeType": "application/json"
   },
@@ -119,7 +119,7 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
 
 		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
 		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
-		<pre><code>curl -i http://localhost:8787/nostr/secret-key \
+		<pre><code>curl -i https://nostr.ocknamo.com/nostr/secret-key \
   -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ=="</code></pre>
 		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共に秘密鍵が返されます：</p>
 		<pre><code>HTTP/1.1 200 OK

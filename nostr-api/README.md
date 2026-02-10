@@ -239,8 +239,5 @@ MIT
 
 ## 参考資料
 
-- [x402 HTTP Transport Specification v2](https://github.com/Fonta1n3/x402)
-- [x402 over Lightning Network 設計書](../docs/idea.md)
-- [x402 v2 比較ドキュメント](../docs/x402-comparison.md)
-- [Cloudflare Workers ドキュメント](https://developers.cloudflare.com/workers/)
+- [x402 HTTP Transport Specification v2](https://github.com/coinbase/x402/blob/main/specs/transports-v2/http.md)
 - [coinos.io API](https://coinos.io)

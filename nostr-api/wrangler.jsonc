@@ -23,7 +23,7 @@
 	 */
 	"kv_namespaces": [
 		{
-			"binding": "SIMP_L402_USED_INVOICES",
+			"binding": "USED_INVOICES",
 			"id": "eeb6bdbb127c411986787b1aac5a0236",
 			"preview_id": "INVOICES"
 		}

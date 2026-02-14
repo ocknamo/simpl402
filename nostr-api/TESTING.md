@@ -1,178 +1,149 @@
-# x402 API 動作確認手順
+# x402 + NIP-58 Badge Award System - 動作確認手順
 
-このドキュメントでは、x402 over Lightning Network APIの動作確認手順を説明します。
+このドキュメントでは、x402 over Lightning Network + NIP-58 Badge Award APIの動作確認手順の概要を説明します。
 
 ## 前提条件
 
 - 開発サーバーが起動していること (`npm run dev`)
-- `curl` コマンドが利用可能であること
+- `curl`, `jq`, `base64` コマンドが利用可能であること
+- `.dev.vars` ファイルに必要な環境変数が設定されていること
 
-## 動作確認手順
+## 環境変数の確認
 
-### 1. 開発サーバーの起動
+テストを開始する前に、必要な環境変数が設定されていることを確認します。
+
+```bash
+cat .dev.vars
+```
+
+必要な環境変数:
+- `COINOS_API_KEY`: coinos.io APIキー
+- `COINOS_API_URL`: `https://coinos.io/api`
+- `INVOICE_AMOUNT_SATS`: `100`
+- `INVOICE_EXPIRY_SECONDS`: `3600`
+- `BADGE_ISSUER_NSEC`: バッジ発行者のNostr秘密鍵（nsec形式）
+
+## 開発サーバーの起動
+
+### 方法1: フォアグラウンド起動（手動テスト時）
 
 ```bash
 cd /home/yoshiki/workspace/ln/simpl402/nostr-api
 npm run dev
 ```
 
-サーバーが `http://localhost:8787` で起動します。
+サーバーが `http://localhost:8787` で起動します。ログはターミナルに直接表示されます。
 
-### 2. 402 Payment Required レスポンスの確認
+### 方法2: バックグラウンド起動（AI自動テスト時の推奨方法）
 
-支払いなしで保護されたエンドポイントにアクセスします。
-
-```bash
-curl -i http://localhost:8787/nostr/secret-key
-```
-
-**期待される結果:**
-```
-HTTP/1.1 402 Payment Required
-Content-Type: application/json
-PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIlBheW1lbnQgcmVxdWlyZWQiLCAicmVzb3VyY2UiOiB7Li4ufSwgImFjY2VwdHMiOiBbey4uLn1dfQ==
-
-{"error":"Payment required"}
-```
-
-✅ **確認ポイント:**
-- ステータスコードが `402 Payment Required`
-- `PAYMENT-REQUIRED` ヘッダーにBase64エンコードされたx402 v2準拠のJSON（resource, accepts配列含む）が含まれている
-- レスポンスボディにエラーメッセージが含まれている
-
-### 3. PAYMENT-REQUIREDのデコードとPAYMENT-SIGNATUREの作成
-
-手順2で取得したPAYMENT-REQUIREDヘッダーをデコードし、PAYMENT-SIGNATUREを作成します。
+AIがテストを自動実行する場合、サーバーをバックグラウンドで起動し、ログをファイルに出力する方法を推奨します：
 
 ```bash
-# PAYMENT-REQUIREDをデコード
-PAYMENT_REQUIRED="eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIlBheW1lbnQgcmVxdWlyZWQiLCAicmVzb3VyY2UiOiB7Li4ufSwgImFjY2VwdHMiOiBbey4uLn1dfQ=="
-echo "$PAYMENT_REQUIRED" | base64 -d | jq
+cd /home/yoshiki/workspace/ln/simpl402/nostr-api
 
-# 出力例:
-# {
-#   "x402Version": 2,
-#   "error": "PAYMENT-SIGNATURE header is required",
-#   "resource": {
-#     "url": "http://localhost:8787/nostr/secret-key",
-#     "description": "Access to Nostr secret key",
-#     "mimeType": "application/json"
-#   },
-#   "accepts": [
-#     {
-#       "scheme": "lightning",
-#       "network": "bitcoin",
-#       "amount": "100000",
-#       "asset": "BTC",
-#       "maxTimeoutSeconds": 3600,
-#       "extra": {
-#         "invoice": "lnbc1..."
-#       }
-#     }
-#   ]
-# }
+# ログディレクトリの作成（初回のみ）
+mkdir -p logs
 
-# invoiceを抽出
-INVOICE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -r '.accepts[0].extra.invoice')
-echo "Invoice: $INVOICE"
+# タイムスタンプ付きログファイル名でバックグラウンド起動
+LOG_FILE="logs/server-$(date +%Y%m%d-%H%M%S).log"
+nohup npm run dev > "$LOG_FILE" 2>&1 &
+
+echo "Server started. Log file: $LOG_FILE"
 ```
 
-### 4. 未払いインボイスでの支払い検証
+この方法により：
+- ✅ サーバーがバックグラウンドで実行され、テストコマンドが同じターミナルで実行可能
+- ✅ ログが `logs/` ディレクトリに保存され、後から確認可能
+- ✅ ログファイル名がタイムスタンプ付きでユニーク（上書きされない）
+- ✅ テスト実行時にターミナルが待機状態にならない
 
-PAYMENT-SIGNATUREを作成して支払い検証を試みます。
-
+**ログの確認:**
 ```bash
-# PAYMENT-SIGNATUREペイロードを作成（x402 v2形式）
-PAYMENT_PAYLOAD=$(cat <<EOF | jq -c | base64 -w0
-{
-  "x402Version": 2,
-  "resource": {
-    "url": "http://localhost:8787/nostr/secret-key",
-    "description": "Access to Nostr secret key",
-    "mimeType": "application/json"
-  },
-  "accepted": {
-    "scheme": "lightning",
-    "network": "bitcoin",
-    "amount": "100000",
-    "asset": "BTC"
-  },
-  "payload": {
-    "invoice": "$INVOICE"
-  }
-}
-EOF
-)
+# 最新のログをリアルタイムで確認
+tail -f logs/server-*.log
 
-curl -i "http://localhost:8787/nostr/secret-key" \
-  -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
+# 最新ログファイルの全体を確認
+cat logs/server-*.log | tail -50
 ```
 
-**期待される結果:**
-```
-HTTP/1.1 402 Payment Required
-Content-Type: application/json
-PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZSwiZXJyb3JSZWFzb24iOiJwYXltZW50X25vdF9jb25maXJtZWQiLCJuZXR3b3JrIjoiYml0Y29pbiJ9
-
-{"error":"Payment not confirmed"}
-```
-
-✅ **確認ポイント:**
-- ステータスコードが `402 Payment Required`
-- `PAYMENT-RESPONSE` ヘッダーにBase64エンコードされた失敗レスポンスが含まれている
-- レスポンスボディが `{"error":"Payment not confirmed"}`
-
-### 5. 実際の支払い後の検証（オプション）
-
-Lightning Walletでインボイスを支払った後、同じPAYMENT-SIGNATUREで再度アクセスします。
-
+**サーバーの停止:**
 ```bash
-# Lightning Walletで$INVOICEを支払う
+# wranglerプロセスを停止
+pkill -f "wrangler dev"
 
-# 支払い後、同じPAYMENT-SIGNATUREで再度アクセス
-curl -i "http://localhost:8787/nostr/secret-key" \
-  -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
+# または、プロセスIDを確認してから停止
+ps aux | grep wrangler
+kill <プロセスID>
 ```
 
-**期待される結果:**
-```
-HTTP/1.1 200 OK
-Content-Type: application/json
-PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Imlud29pY2UiOiJsbmJjMS4uLiIsInNldHRsZWRBdCI6MTczOTExNjgwMH19
+### 方法3: 複数ターミナル方式
 
-{"secretKey":"nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
-```
+複数のターミナルを使用してサーバーログをリアルタイムで確認する場合：
 
-✅ **確認ポイント:**
-- ステータスコードが `200 OK`
-- `PAYMENT-RESPONSE` ヘッダーにBase64エンコードされた成功レスポンスが含まれている
-- JSONレスポンスに `secretKey` が含まれている
-
-### 6. インボイスの再利用防止の確認
-
-同じ支払い済みPAYMENT-SIGNATUREで再度アクセスします。
-
+**ターミナル1（サーバー起動用）:**
 ```bash
-# 同じ支払い済みPAYMENT-SIGNATUREを再度使用
-curl -i "http://localhost:8787/nostr/secret-key" \
-  -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
+cd /home/yoshiki/workspace/ln/simpl402/nostr-api
+npm run dev
 ```
 
-**期待される結果:**
-```
-HTTP/1.1 402 Payment Required
-Content-Type: application/json
-PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZSwiZXJyb3JSZWFzb24iOiJpbnZvaWNlX2FscmVhZHlfdXNlZCIsIm5ldHdvcmsiOiJiaXRjb2luIn0=
-
-{"error":"Invoice already used"}
+**ターミナル2（テスト実行用）:**
+```bash
+cd /home/yoshiki/workspace/ln/simpl402/nostr-api
+# ここでテストコマンド（curl等）を実行
 ```
 
-✅ **確認ポイント:**
-- ステータスコードが `402 Payment Required`
-- `PAYMENT-RESPONSE` ヘッダーにBase64エンコードされた失敗レスポンスが含まれている
-- レスポンスボディが `{"error":"Invoice already used"}`
+---
 
-### 7. 存在しないエンドポイントの確認
+## テストケース
+
+各テストケースは個別のファイルに分離されています。以下のリンクから各テストケースの詳細を確認してください。
+
+### [テストケース1: GET /nostr/secret-key (デモエンドポイント)](./test/test-case-1.md)
+
+x402で保護された秘密鍵取得エンドポイントのテストです。
+
+**確認できる機能:**
+- 402 Payment Requiredレスポンス
+- PAYMENT-REQUIREDヘッダー（x402 v2形式）
+- PAYMENT-SIGNATUREヘッダー
+- PAYMENT-RESPONSEヘッダー
+- Lightning Network支払い検証
+- インボイス再利用防止（Cloudflare KV）
+
+**実行方法:**
+```bash
+# test/test-case-1.md を参照してください
+```
+
+---
+
+### [テストケース2: POST /nostr/badge-challenge (NIP-58 Badge Award)](./test/test-case-2.md)
+
+支払い後にNIP-58バッジを発行するエンドポイントのテストです。
+
+**デフォルトテスト用npub:**
+```bash
+npub19dzc258s3l8ht547cktvqsgura8wj0ecyr02a9g6zgxq9r3scjqqqrg7sk
+```
+
+**確認できる機能:**
+- NIP-58 Badge Awardイベント発行
+- npub形式のバリデーション
+- 誤課金防止設計（事前検証）
+- x402プロトコル（v2準拠）
+- Lightning Network支払い検証
+- インボイス再利用防止
+
+**実行方法:**
+```bash
+# test/test-case-2.md を参照してください
+```
+
+---
+
+## エラーハンドリング
+
+### 存在しないエンドポイント
 
 ```bash
 curl -i http://localhost:8787/invalid/path
@@ -181,14 +152,50 @@ curl -i http://localhost:8787/invalid/path
 **期待される結果:**
 ```
 HTTP/1.1 404 Not Found
-Content-Length: 9
-Content-Type: text/plain;charset=UTF-8
 
 Not Found
 ```
 
-✅ **確認ポイント:**
-- ステータスコードが `404 Not Found`
+### 金額不一致エラー
+
+実装では、インボイスの金額が期待値（100 sats）と異なる場合にエラーを返します。
+この検証は実装内部で自動的に行われます。
+
+---
+
+## 全体のまとめ
+
+すべてのテストケースを実行することで、以下の機能が正常に動作していることを確認できます：
+
+### x402プロトコル（v2準拠）
+1. ✅ 402 Payment Requiredレスポンスの生成
+2. ✅ PAYMENT-REQUIREDヘッダー（resource, accepts配列）
+3. ✅ PAYMENT-SIGNATUREヘッダー（x402 v2形式）
+4. ✅ PAYMENT-RESPONSEヘッダー（success/failure settlement）
+5. ✅ 支払い検証（coinos.io API連携）
+6. ✅ インボイス再利用防止（Cloudflare KV）
+7. ✅ インボイス有効期限チェック
+8. ✅ 金額検証
+
+### NIP-58 Badge Award
+1. ✅ バッジアワードイベント（kind 8）の作成
+2. ✅ イベント署名（バッジ発行者秘密鍵）
+3. ✅ Nostrリレーへの公開（非同期、`ctx.waitUntil`）
+4. ✅ npub形式のバリデーション
+
+### 誤課金防止設計
+1. ✅ リクエストボディの事前検証（支払い前）
+2. ✅ 無効な入力でのエラーレスポンス（400 Bad Request）
+3. ✅ 検証成功後のみ課金要求（402 Payment Required）
+
+### セキュリティ
+1. ✅ 環境変数による秘密情報管理
+2. ✅ インボイス重複チェック
+3. ✅ 支払いハッシュ検証
+
+すべての確認項目が期待通りの結果になれば、APIは正常に動作しています！
+
+---
 
 ## トラブルシューティング
 
@@ -210,31 +217,34 @@ npm run dev
 cat .dev.vars
 ```
 
-必要な環境変数:
-- `COINOS_API_KEY`
-- `COINOS_API_URL`
-- `INVOICE_AMOUNT_SATS`
-- `INVOICE_EXPIRY_SECONDS`
+### coinos.io API呼び出しでエラーが発生する
 
-### API呼び出しでエラーが発生する
+- `COINOS_API_KEY` が正しく設定されているか確認
+- coinos.ioアカウントにログインして、APIキーが有効か確認
+- 開発サーバーのログを確認（`[DEBUG]` で始まる行）
 
-開発サーバーのログを確認してください。デバッグ情報が出力されています。
+### BADGE_ISSUER_NSECエラー
+
+- `BADGE_ISSUER_NSEC` が `nsec1...` 形式で設定されているか確認
+- 有効なNostr秘密鍵であることを確認
+
+### jqコマンドが見つからない
 
 ```bash
-# ターミナルでログを確認
-# [DEBUG] で始まる行に注目
+# jqをインストール（Debian/Ubuntu）
+sudo apt install jq
 ```
 
-## まとめ
+---
 
-この手順により、以下の機能が正常に動作していることを確認できます：
+## テストファイルの構成
 
-1. ✅ x402 v2準拠の402 Payment Requiredレスポンスの生成
-2. ✅ PAYMENT-REQUIREDヘッダーにresource、accepts配列を含むペイロードの発行
-3. ✅ PAYMENT-SIGNATUREヘッダーでx402 v2形式のペイロード送信
-4. ✅ PAYMENT-RESPONSEヘッダーで成功/失敗のsettlementレスポンス返却
-5. ✅ 支払い検証（未払い/支払い済み）
-6. ✅ インボイスの再利用防止（Cloudflare KVで管理）
-7. ✅ エラーハンドリング
+```
+nostr-api/
+├── TESTING.md                    # このファイル（概要・共通設定）
+└── test/
+    ├── test-case-1.md            # テストケース1の詳細手順
+    └── test-case-2.md            # テストケース2の詳細手順
+```
 
-すべての確認項目が期待通りの結果になれば、APIは正常に動作しています！
+各テストケースは独立して実行可能です。必要なテストケースのみを選択して実行できます。

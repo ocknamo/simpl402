@@ -18,6 +18,7 @@
 		"wrangler": "^4.63.0"
 	},
 	"dependencies": {
-		"light-bolt11-decoder": "^3.2.0"
+		"light-bolt11-decoder": "^3.2.0",
+		"nostr-tools": "2.23.1"
 	}
 }

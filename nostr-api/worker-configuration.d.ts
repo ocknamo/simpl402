@@ -11,6 +11,8 @@ declare namespace Cloudflare {
 		INVOICE_AMOUNT_SATS: "100";
 		INVOICE_EXPIRY_SECONDS: "3600";
 		COINOS_API_KEY: string;
+		/** Badge issuer private key in nsec format for NIP-58 badge awards */
+		BADGE_ISSUER_NSEC: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

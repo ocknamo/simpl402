@@ -1,4 +1,4 @@
-# x402 over Lightning Network - Nostr API
+# x402 over Lightning Network - API
 
 Lightning Network による支払い必須の REST API 実装です。**x402 HTTP Transport Specification v2** に完全準拠しています。
 
@@ -14,9 +14,13 @@ x402 v2仕様に準拠し、以下のヘッダーを使用します：
 
 ## 機能
 
-- **GET /nostr/secret-key**: Lightning 支払いが必要なエンドポイント
+- **GET /test/uuid**: Lightning 支払いが必要なエンドポイント
   - 初回アクセス時: `402 Payment Required` + `PAYMENT-REQUIRED` ヘッダーでLightning invoiceを含む支払い要求を返す
-  - 支払い後: `PAYMENT-SIGNATURE` ヘッダーでx402 v2形式のペイロードを送信し、検証後に `PAYMENT-RESPONSE` ヘッダーと共にリソースを返す
+  - 支払い後: `PAYMENT-SIGNATURE` ヘッダーでx402 v2形式のペイロードを送信し、検証後に `PAYMENT-RESPONSE` ヘッダーと共に UUID v4 を返す
+
+- **POST /nostr/badge-challenge**: Lightning 支払い後に NIP-58 バッジを発行
+  - リクエストボディに npub を含める必要があります
+  - 支払い検証後、指定された npub に対してバッジアワードイベントを発行
 
 ## セットアップ
 
@@ -69,7 +73,7 @@ npm run dev
 ### 1. 初回アクセス（402 レスポンス）
 
 ```bash
-curl -i http://localhost:8787/nostr/secret-key
+curl -i http://localhost:8787/test/uuid
 ```
 
 レスポンス例：
@@ -92,17 +96,17 @@ echo "eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIlBBWU1FTlQtU0lHTkFUVVJFIGhlYWRlciBpcy
 ```json
 {
   "x402Version": 2,
-  "error": "PAYMENT-SIGNATURE header is required",
+  "error": "Payment required",
   "resource": {
-    "url": "http://localhost:8787/nostr/secret-key",
-    "description": "Access to Nostr secret key",
+    "url": "http://localhost:8787/test/uuid",
+    "description": "Access to UUID v4 generator",
     "mimeType": "application/json"
   },
   "accepts": [
     {
       "scheme": "lightning",
       "network": "bitcoin",
-      "amount": "100000",
+      "amount": "100",
       "asset": "BTC",
       "maxTimeoutSeconds": 3600,
       "extra": {
@@ -125,14 +129,14 @@ PAYMENT_PAYLOAD=$(cat <<EOF | jq -c | base64 -w0
 {
   "x402Version": 2,
   "resource": {
-    "url": "http://localhost:8787/nostr/secret-key",
-    "description": "Access to Nostr secret key",
+    "url": "http://localhost:8787/test/uuid",
+    "description": "Access to UUID v4 generator",
     "mimeType": "application/json"
   },
   "accepted": {
     "scheme": "lightning",
     "network": "bitcoin",
-    "amount": "100000",
+    "amount": "100",
     "asset": "BTC"
   },
   "payload": {
@@ -142,7 +146,7 @@ PAYMENT_PAYLOAD=$(cat <<EOF | jq -c | base64 -w0
 EOF
 )
 
-curl -i http://localhost:8787/nostr/secret-key \
+curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```
 
@@ -152,7 +156,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Imlud29pY2UiOiJsbmJjMS4uLiIsInNldHRsZWRBdCI6MTczOTExNjgwMH19
 
-{"secretKey":"nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"uuid":"550e8400-e29b-41d4-a716-446655440000"}
 ```
 
 ## デプロイ
@@ -180,7 +184,7 @@ npm run deploy
 ```
 Client
   |
-  | 1. GET /nostr/secret-key
+  | 1. GET /test/uuid
   |
 Server (402 + PAYMENT-REQUIRED header with x402 v2 payload)
   |
@@ -188,9 +192,9 @@ Server (402 + PAYMENT-REQUIRED header with x402 v2 payload)
   |
 Lightning Network (coinos.io)
   |
-  | 3. GET /nostr/secret-key + PAYMENT-SIGNATURE header with x402 v2 payload
+  | 3. GET /test/uuid + PAYMENT-SIGNATURE header with x402 v2 payload
   |
-Server (検証 → 200 OK + PAYMENT-RESPONSE header + secretKey)
+Server (検証 → 200 OK + PAYMENT-RESPONSE header + uuid)
 ```
 
 ### x402 v2 ヘッダーフロー
@@ -226,6 +230,11 @@ Server (検証 → 200 OK + PAYMENT-RESPONSE header + secretKey)
 - `COINOS_API_URL`: coinos.io API の URL
 - `INVOICE_AMOUNT_SATS`: デフォルトの invoice 金額（100 sats）
 - `INVOICE_EXPIRY_SECONDS`: invoice の有効期限（3600秒 = 1時間）
+
+### 環境変数（Secrets）
+
+- `COINOS_API_KEY`: coinos.io API キー
+- `BADGE_ISSUER_NSEC`: バッジ発行用 Nostr 秘密鍵（NIP-58 バッジ機能用）
 
 ## セキュリティ
 

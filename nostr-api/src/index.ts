@@ -26,9 +26,9 @@ export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
 
-		// GET /nostr/secret-key エンドポイント (x402 protected)
-		if (request.method === 'GET' && url.pathname === '/nostr/secret-key') {
-			return handleSecretKeyEndpoint(request, env);
+		// GET /test/uuid エンドポイント (x402 protected)
+		if (request.method === 'GET' && url.pathname === '/test/uuid') {
+			return handleUuidEndpoint(request, env);
 		}
 
 		// POST /nostr/badge-challenge エンドポイント (x402 protected, 100 sats)
@@ -59,9 +59,9 @@ function createErrorResponse(message: string, status: number, errorReason: strin
 }
 
 /**
- * Handle /nostr/secret-key endpoint with x402 payment protection
+ * Handle /test/uuid endpoint with x402 payment protection
  */
-async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Response> {
+async function handleUuidEndpoint(request: Request, env: Env): Promise<Response> {
 	const paymentSigHeader = request.headers.get('PAYMENT-SIGNATURE');
 
 	// No payment signature - require payment (402)
@@ -142,11 +142,14 @@ async function handleSecretKeyEndpoint(request: Request, env: Env): Promise<Resp
 		// Mark invoice as used (TTL: 24 hours)
 		await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
 
-		// Payment verified - return the secret key with PAYMENT-RESPONSE header
+		// Payment verified - return a UUID v4 with PAYMENT-RESPONSE header
 		const settlementResponse = createSuccessSettlement(invoice);
 
+		// Generate UUID v4
+		const uuid = crypto.randomUUID();
+
 		const response = {
-			secretKey: 'nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+			uuid: uuid,
 		};
 
 		return new Response(JSON.stringify(response), {

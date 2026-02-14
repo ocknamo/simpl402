@@ -27,7 +27,8 @@ export function createResourceFromRequest(request: Request): X402Resource {
 	const url = new URL(request.url);
 
 	const descriptions: Record<string, string> = {
-		'/nostr/secret-key': 'Access to Nostr secret key',
+		'/test/uuid': 'Access to UUID v4 generator',
+		'/nostr/badge-challenge': 'Award NIP-58 badge',
 	};
 
 	return {
@@ -63,7 +64,7 @@ export function createLightningPaymentMethod(
 export function createPaymentRequired(
 	resource: X402Resource,
 	accepts: X402PaymentMethod[],
-	error: string = 'PAYMENT-SIGNATURE header is required'
+	error: string = 'Payment required'
 ): X402PaymentRequired {
 	return {
 		x402Version: 2,

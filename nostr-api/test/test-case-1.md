@@ -1,6 +1,6 @@
-# テストケース1: GET /nostr/secret-key (デモエンドポイント)
+# テストケース1: GET /test/uuid (デモエンドポイント)
 
-x402で保護された秘密鍵取得エンドポイントのテストです。
+x402で保護された UUID v4 生成エンドポイントのテストです。
 
 ## 前提条件
 
@@ -18,7 +18,7 @@ x402で保護された秘密鍵取得エンドポイントのテストです。
 支払いなしで保護されたエンドポイントにアクセスします。
 
 ```bash
-curl -i http://localhost:8787/nostr/secret-key
+curl -i http://localhost:8787/test/uuid
 ```
 
 **期待される結果:**
@@ -30,7 +30,7 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6Mi...
 {"error":"Payment required"}
 ```
 
-✅ **確認ポイント:**
+確認ポイント:
 - ステータスコードが `402 Payment Required`
 - `PAYMENT-REQUIRED` ヘッダーが存在する
 - レスポンスボディに `{"error":"Payment required"}` が含まれる
@@ -41,7 +41,7 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6Mi...
 
 ```bash
 # レスポンスからPAYMENT-REQUIREDヘッダーを抽出してデコード
-PAYMENT_REQUIRED=$(curl -s -i http://localhost:8787/nostr/secret-key | grep -i "payment-required:" | cut -d' ' -f2 | tr -d '\r')
+PAYMENT_REQUIRED=$(curl -s -i http://localhost:8787/test/uuid | grep -i "payment-required:" | cut -d' ' -f2 | tr -d '\r')
 
 # デコードして確認
 echo "$PAYMENT_REQUIRED" | base64 -d | jq .
@@ -53,15 +53,15 @@ echo "$PAYMENT_REQUIRED" | base64 -d | jq .
   "x402Version": 2,
   "error": "Payment required",
   "resource": {
-    "url": "http://localhost:8787/nostr/secret-key",
-    "description": "Access to Nostr secret key",
+    "url": "http://localhost:8787/test/uuid",
+    "description": "Access to UUID v4 generator",
     "mimeType": "application/json"
   },
   "accepts": [
     {
       "scheme": "lightning",
       "network": "bitcoin",
-      "amount": "100",
+      "amount": "100000",
       "asset": "BTC",
       "maxTimeoutSeconds": 3600,
       "extra": {
@@ -72,9 +72,10 @@ echo "$PAYMENT_REQUIRED" | base64 -d | jq .
 }
 ```
 
-✅ **確認ポイント:**
+確認ポイント:
 - `x402Version` が `2`
 - `resource` に `url`, `description`, `mimeType` が含まれる
+- `description` が "Access to UUID v4 generator"
 - `accepts` 配列に Lightning支払い方法が含まれる
 - `extra.invoice` に BOLT11 インボイスが含まれる
 
@@ -121,7 +122,7 @@ echo "PAYMENT-SIGNATURE payload created"
 ## 1-5. 未払いインボイスでの支払い検証
 
 ```bash
-curl -i http://localhost:8787/nostr/secret-key \
+curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```
 
@@ -134,7 +135,7 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZS...
 {"error":"Payment not confirmed"}
 ```
 
-✅ **確認ポイント:**
+確認ポイント:
 - ステータスコードが `402 Payment Required`
 - `PAYMENT-RESPONSE` ヘッダーに失敗レスポンスが含まれる
 - レスポンスボディが `{"error":"Payment not confirmed"}`
@@ -144,7 +145,7 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZS...
 ## 1-6. PAYMENT-RESPONSEのデコード
 
 ```bash
-PAYMENT_RESPONSE=$(curl -s -i http://localhost:8787/nostr/secret-key \
+PAYMENT_RESPONSE=$(curl -s -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD" | \
   grep -i "payment-response:" | cut -d' ' -f2 | tr -d '\r')
 
@@ -174,7 +175,7 @@ echo ""
 read -p "Press Enter after payment is complete..."
 
 # 支払い後、同じPAYMENT-SIGNATUREで再度アクセス
-curl -i http://localhost:8787/nostr/secret-key \
+curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```
 
@@ -184,13 +185,13 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlL...
 
-{"secretKey":"nsec1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"uuid":"550e8400-e29b-41d4-a716-446655440000"}
 ```
 
-✅ **確認ポイント:**
+確認ポイント:
 - ステータスコードが `200 OK`
 - `PAYMENT-RESPONSE` ヘッダーに成功レスポンスが含まれる
-- レスポンスボディに `secretKey` が含まれる
+- レスポンスボディに `uuid` が含まれる（UUID v4形式）
 
 ---
 
@@ -199,7 +200,7 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlL...
 同じ支払い済みPAYMENT-SIGNATUREで再度アクセスします。
 
 ```bash
-curl -i http://localhost:8787/nostr/secret-key \
+curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```
 
@@ -212,7 +213,7 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZS...
 {"error":"Invoice already used"}
 ```
 
-✅ **確認ポイント:**
+確認ポイント:
 - ステータスコードが `402 Payment Required`
 - レスポンスボディが `{"error":"Invoice already used"}`
 - 同一インボイスの再利用が防止されている（Cloudflare KV）
@@ -224,16 +225,16 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjpmYWxzZS...
 このテストケースで確認できる項目：
 
 ### x402プロトコル（v2準拠）
-1. ✅ 402 Payment Requiredレスポンスの生成
-2. ✅ PAYMENT-REQUIREDヘッダー（resource, accepts配列）
-3. ✅ PAYMENT-SIGNATUREヘッダー（x402 v2形式）
-4. ✅ PAYMENT-RESPONSEヘッダー（success/failure settlement）
-5. ✅ 支払い検証（coinos.io API連携）
-6. ✅ インボイス再利用防止（Cloudflare KV）
-7. ✅ インボイス有効期限チェック
-8. ✅ 金額検証
+1. 402 Payment Requiredレスポンスの生成
+2. PAYMENT-REQUIREDヘッダー（resource, accepts配列）
+3. PAYMENT-SIGNATUREヘッダー（x402 v2形式）
+4. PAYMENT-RESPONSEヘッダー（success/failure settlement）
+5. 支払い検証（coinos.io API連携）
+6. インボイス再利用防止（Cloudflare KV）
+7. インボイス有効期限チェック
+8. 金額検証
 
 ### セキュリティ
-1. ✅ 環境変数による秘密情報管理
-2. ✅ インボイス重複チェック
-3. ✅ 支払いハッシュ検証
+1. 環境変数による秘密情報管理
+2. インボイス重複チェック
+3. 支払いハッシュ検証

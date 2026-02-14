@@ -98,9 +98,9 @@ cd /home/yoshiki/workspace/ln/simpl402/nostr-api
 
 各テストケースは個別のファイルに分離されています。以下のリンクから各テストケースの詳細を確認してください。
 
-### [テストケース1: GET /nostr/secret-key (デモエンドポイント)](./test/test-case-1.md)
+### [テストケース1: GET /test/uuid (デモエンドポイント)](./test/test-case-1.md)
 
-x402で保護された秘密鍵取得エンドポイントのテストです。
+x402で保護された UUID v4 生成エンドポイントのテストです。
 
 **確認できる機能:**
 - 402 Payment Requiredレスポンス

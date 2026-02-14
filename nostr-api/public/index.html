@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>x402 over Lightning Network - Nostr API</title>
+		<title>x402 over Lightning Network - API</title>
 		<style>
 			body {
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -65,7 +65,7 @@
 		</style>
 	</head>
 	<body>
-		<h1>x402 over Lightning Network - Nostr API</h1>
+		<h1>x402 over Lightning Network - API</h1>
 		
 		<p>
 			Lightning Network による支払いが必要な REST API です。<strong>x402 HTTP Transport Specification v2</strong> に完全準拠しています。
@@ -74,14 +74,19 @@
 		<h2>API エンドポイント</h2>
 		
 		<div class="endpoint">
-			<strong>GET /nostr/secret-key</strong>
-			<p>Lightning 支払い検証後に Nostr の秘密鍵を返します。</p>
+			<strong>GET /test/uuid</strong>
+			<p>Lightning 支払い検証後に UUID v4 を返します。</p>
+		</div>
+
+		<div class="endpoint">
+			<strong>POST /nostr/badge-challenge</strong>
+			<p>Lightning 支払い検証後に NIP-58 バッジを発行します。</p>
 		</div>
 
 		<h2>使い方</h2>
 		
 		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
-		<pre><code>curl -i https://simpl402.ocknamo.com/nostr/secret-key</code></pre>
+		<pre><code>curl -i https://simpl402.ocknamo.com/test/uuid</code></pre>
 		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
 		<pre><code>HTTP/1.1 402 Payment Required
 Content-Type: application/json
@@ -94,17 +99,17 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
 		<p>x402 v2 形式のペイロード：</p>
 		<pre><code>{
   "x402Version": 2,
-  "error": "PAYMENT-SIGNATURE header is required",
-			"resource": {
-				"url": "https://simpl402.ocknamo.com/nostr/secret-key",
-    "description": "Access to Nostr secret key",
+  "error": "Payment required",
+  "resource": {
+    "url": "https://simpl402.ocknamo.com/test/uuid",
+    "description": "Access to UUID v4 generator",
     "mimeType": "application/json"
   },
   "accepts": [
     {
       "scheme": "lightning",
       "network": "bitcoin",
-      "amount": "100000",
+      "amount": "100",
       "asset": "BTC",
       "maxTimeoutSeconds": 3600,
       "extra": {
@@ -119,14 +124,14 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
 
 		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
 		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
-		<pre><code>curl -i https://simpl402.ocknamo.com/nostr/secret-key \
+		<pre><code>curl -i https://simpl402.ocknamo.com/test/uuid \
   -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ=="</code></pre>
-		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共に秘密鍵が返されます：</p>
+		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共に UUID が返されます：</p>
 		<pre><code>HTTP/1.1 200 OK
 Content-Type: application/json
 PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Li4ufX0=
 
-{"secretKey":"nsec1..."}</code></pre>
+{"uuid":"550e8400-e29b-41d4-a716-446655440000"}</code></pre>
 
 		<h2>x402 v2 ヘッダー</h2>
 		<ul>

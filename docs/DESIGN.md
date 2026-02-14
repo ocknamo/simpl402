@@ -269,16 +269,16 @@ ctx.waitUntil(
 
 ## APIエンドポイント
 
-### 1. GET /nostr/secret-key
+### 1. GET /test/uuid
 
-**機能**: x402で保護された秘密鍵取得（デモ用）
+**機能**: x402で保護された UUID v4 生成（デモ用）
 
 **課金**: 100 satoshis
 
 **レスポンス例**:
 ```json
 {
-  "secretKey": "nsec1xxxxx..."
+  "uuid": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -314,7 +314,7 @@ ctx.waitUntil(
 ### 支払いフロー（基本）
 
 ```
-1. Client → Server: GET /resource
+1. Client → Server: GET /test/uuid
    (PAYMENT-SIGNATUREヘッダーなし)
 
 2. Server → Client: 402 Payment Required
@@ -322,7 +322,7 @@ ctx.waitUntil(
 
 3. Client: Lightning支払い実行
 
-4. Client → Server: GET /resource
+4. Client → Server: GET /test/uuid
    PAYMENT-SIGNATURE: {invoice, ...}
 
 5. Server: 
@@ -333,7 +333,7 @@ ctx.waitUntil(
 
 6. Server → Client: 200 OK
    PAYMENT-RESPONSE: {success: true}
-   Content: {リソースデータ}
+   Content: {"uuid": "550e8400-..."}
 ```
 
 ### バッジアワードフロー
@@ -555,11 +555,11 @@ npm run deploy
 
 ### 手動テスト手順
 
-#### 1. 秘密鍵エンドポイント
+#### 1. UUID生成エンドポイント
 
 ```bash
 # 1. 初回リクエスト（402受信）
-curl -v http://localhost:8787/nostr/secret-key
+curl -v http://localhost:8787/test/uuid
 
 # PAYMENT-REQUIREDヘッダーからinvoiceを取得
 
@@ -567,7 +567,7 @@ curl -v http://localhost:8787/nostr/secret-key
 # (Lightning Walletで支払い)
 
 # 3. 支払い証明付きリクエスト
-curl -v http://localhost:8787/nostr/secret-key \
+curl -v http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: <base64_payload>"
 ```
 

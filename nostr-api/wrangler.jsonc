@@ -35,7 +35,18 @@
 		"COINOS_API_URL": "https://coinos.io/api",
 		"INVOICE_AMOUNT_SATS": "100",
 		"INVOICE_EXPIRY_SECONDS": "3600"
-	}
+	},
+	"routes": [
+		{
+			"pattern": "simpl402.ocknamo.com/*",
+			"zone_name": "ocknamo.com"
+		},
+		{
+			"pattern": "simpl402.ocknamo.com",
+			"zone_name": "ocknamo.com",
+			"custom_domain": true
+		}
+	]
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

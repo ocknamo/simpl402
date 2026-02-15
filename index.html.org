@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>x402 over Lightning Network - API</title>
+		<style>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				max-width: 800px;
+				margin: 0 auto;
+				padding: 2rem;
+				line-height: 1.6;
+				color: #333;
+			}
+			h1 {
+				color: #f7931a;
+				border-bottom: 3px solid #f7931a;
+				padding-bottom: 0.5rem;
+			}
+			h2 {
+				color: #555;
+				margin-top: 2rem;
+			}
+			code {
+				background: #f4f4f4;
+				padding: 0.2rem 0.4rem;
+				border-radius: 3px;
+				font-family: 'Courier New', monospace;
+			}
+			pre {
+				background: #f4f4f4;
+				padding: 1rem;
+				border-radius: 5px;
+				overflow-x: auto;
+			}
+			.endpoint {
+				background: #e8f5e9;
+				padding: 1rem;
+				border-left: 4px solid #4caf50;
+				margin: 1rem 0;
+			}
+			.status-badge {
+				display: inline-block;
+				padding: 0.2rem 0.6rem;
+				border-radius: 3px;
+				font-size: 0.9rem;
+				font-weight: bold;
+			}
+			.status-402 {
+				background: #fff3cd;
+				color: #856404;
+			}
+			.status-200 {
+				background: #d4edda;
+				color: #155724;
+			}
+			footer {
+				margin-top: 3rem;
+				padding-top: 1rem;
+				border-top: 1px solid #ddd;
+				text-align: center;
+				color: #777;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>x402 over Lightning Network - API</h1>
+		
+		<p>
+			Lightning Network による支払いが必要な REST API です。<strong>x402 HTTP Transport Specification v2</strong> に完全準拠しています。
+		</p>
+
+		<h2>API エンドポイント</h2>
+		
+		<div class="endpoint">
+			<strong>GET /test/uuid</strong>
+			<p>Lightning 支払い検証後に UUID v4 を返します。</p>
+		</div>
+
+		<div class="endpoint">
+			<strong>POST /nostr/badge-challenge</strong>
+			<p>Lightning 支払い検証後に NIP-58 バッジを発行します。</p>
+		</div>
+
+		<h2>使い方</h2>
+		
+		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -d '{"npub":"npub1xxxxxxx9dzc"}'</code></pre>
+		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
+		<pre><code>HTTP/1.1 402 Payment Required
+Content-Type: application/json
+PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IHsuLi59LCAiYWNjZXB0cyI6IFt7Li4ufV19
+
+{"error":"Payment required"}</code></pre>
+
+		<h3>2. PAYMENT-REQUIRED のデコード</h3>
+		<pre><code>echo "eyJ4NDAyVmVyc2lvbiI6Mi4uLiJ9" | base64 -d | jq</code></pre>
+		<p>x402 v2 形式のペイロード：</p>
+		<pre><code>{
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {
+    "url": "https://simpl402.ocknamo.com/nostr/badge-challenge",
+    "description": "Issue a NIP-58 badge award",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "lightning",
+      "network": "bitcoin",
+      "amount": "100",
+      "asset": "BTC",
+      "maxTimeoutSeconds": 3600,
+      "extra": {
+        "invoice": "lnbc1..."
+      }
+    }
+  ]
+}</code></pre>
+
+		<h3>3. Invoice の支払い</h3>
+		<p><code>accepts[0].extra.invoice</code> の値を Lightning ウォレットで支払います（100 sats固定）。</p>
+
+		<h3>3.5. PAYMENT-SIGNATURE ペイロードの構築</h3>
+		<p>支払い後、x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを構築します。</p>
+		<p>構築されたペイロードの中身（Base64デコード前）：</p>
+		<pre><code>{
+  "x402Version": 2,
+  "resource": {
+    "url": "https://simpl402.ocknamo.com/nostr/badge-challenge",
+    "description": "Issue a NIP-58 badge award",
+    "mimeType": "application/json"
+  },
+  "accepted": {
+    "scheme": "lightning",
+    "network": "bitcoin",
+    "amount": "100",
+    "asset": "BTC",
+    "maxTimeoutSeconds": 3600
+  },
+  "payload": {
+    "invoice": "lnbc1..."
+  }
+}</code></pre>
+
+		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
+		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ==" \
+  -d '{"npub":"npub1xxxxxxx9dzc"}'</code></pre>
+		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共にバッジ発行結果が返されます：</p>
+		<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Li4ufX0=
+
+{"success":true,"eventId":"abc123...","message":"Badge awarded successfully"}</code></pre>
+
+		<h2>x402 v2 ヘッダー</h2>
+		<ul>
+			<li><strong>PAYMENT-REQUIRED</strong>: サーバーが支払い要求を送信（resource、accepts配列を含む）</li>
+			<li><strong>PAYMENT-SIGNATURE</strong>: クライアントが支払い情報を送信（x402Version、resource、accepted、payloadを含む）</li>
+			<li><strong>PAYMENT-RESPONSE</strong>: サーバーが決済結果を返却（success、transaction、errorReasonなどを含む）</li>
+		</ul>
+
+		<h2>セキュリティ</h2>
+		<ul>
+			<li>各 invoice は一度のみ使用可能</li>
+			<li>期限切れ invoice は自動的に拒否</li>
+			<li>coinos.io Lightning ノードで支払い検証</li>
+			<li>x402 v2 仕様に完全準拠</li>
+		</ul>
+
+		<h2>技術スタック</h2>
+		<ul>
+			<li><a href="https://github.com/coinbase/x402/blob/main/specs/transports-v2/http.md"> x402 HTTP Transport Specification v2</a></li>
+			<li>Cloudflare Workers</li>
+			<li>Lightning Network（<a href="https://coinos.io">coinos.io API</a>）</li>
+			<li>TypeScript</li>
+		</ul>
+
+		<footer>
+			<p>Built with Lightning Network</p>
+		</footer>
+	</body>
+</html>

@@ -86,7 +86,9 @@
 		<h2>使い方</h2>
 		
 		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
-		<pre><code>curl -i https://simpl402.ocknamo.com/test/uuid</code></pre>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -d '{"npub":"npub19dzc258s3l8ht547cktvqsgura8wj0ecyr02a9g6zgxq9r3scjqqqrg7sk"}'</code></pre>
 		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
 		<pre><code>HTTP/1.1 402 Payment Required
 Content-Type: application/json
@@ -101,8 +103,8 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
   "x402Version": 2,
   "error": "Payment required",
   "resource": {
-    "url": "https://simpl402.ocknamo.com/test/uuid",
-    "description": "Access to UUID v4 generator",
+    "url": "https://simpl402.ocknamo.com/nostr/badge-challenge",
+    "description": "Issue a NIP-58 badge award",
     "mimeType": "application/json"
   },
   "accepts": [
@@ -120,18 +122,20 @@ PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IH
 }</code></pre>
 
 		<h3>3. Invoice の支払い</h3>
-		<p><code>accepts[0].extra.invoice</code> の値を Lightning ウォレットで支払います（デフォルト: 100 sats）。</p>
+		<p><code>accepts[0].extra.invoice</code> の値を Lightning ウォレットで支払います（100 sats固定）。</p>
 
 		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
 		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
-		<pre><code>curl -i https://simpl402.ocknamo.com/test/uuid \
-  -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ=="</code></pre>
-		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共に UUID が返されます：</p>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ==" \
+  -d '{"npub":"npub19dzc258s3l8ht547cktvqsgura8wj0ecyr02a9g6zgxq9r3scjqqqrg7sk"}'</code></pre>
+		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共にバッジ発行結果が返されます：</p>
 		<pre><code>HTTP/1.1 200 OK
 Content-Type: application/json
 PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Li4ufX0=
 
-{"uuid":"550e8400-e29b-41d4-a716-446655440000"}</code></pre>
+{"success":true,"eventId":"abc123...","message":"Badge awarded successfully"}</code></pre>
 
 		<h2>x402 v2 ヘッダー</h2>
 		<ul>

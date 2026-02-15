@@ -46,7 +46,9 @@
 			"zone_name": "ocknamo.com",
 			"custom_domain": true
 		}
-	]
+	],
+	"workers_dev": true,
+	"preview_urls": true
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

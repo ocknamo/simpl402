@@ -209,8 +209,8 @@ async function handleBadgeChallengeEndpoint(
 	ctx: ExecutionContext
 ): Promise<Response> {
 	// Constants for badge configuration
-	const BADGE_D_TAG = 'ocknamo-test-0001';
-	const RELAY_URLS = ['wss://yabu.me', 'wss://relay.damus.io', 'wss://nos.lol'];
+	const BADGE_D_TAG = 'simpl402-challenge-success-00';
+	const RELAY_URLS = ['wss://yabu.me', 'wss://relay.damus.io', 'wss://r.kojira.io', 'wss://relay.rodbishop.nz', 'wss://nostr.bitcoiner.social', 'wss://nostr.land', 'wss://nostr.mom'];
 	const BADGE_AMOUNT_SATS = 100;
 
 	const paymentSigHeader = request.headers.get('PAYMENT-SIGNATURE');

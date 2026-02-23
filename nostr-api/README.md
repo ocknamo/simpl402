@@ -12,6 +12,8 @@ x402 v2仕様に準拠し、以下のヘッダーを使用します：
 - `PAYMENT-SIGNATURE`: クライアントが支払い情報を送信（x402Version、resource、accepted、payloadを含む）
 - `PAYMENT-RESPONSE`: サーバーが決済結果を返却（success、transaction、errorReasonなどを含む）
 
+**支払いスキーム**: `exact` on Lightning Network (CAIP-2: `lightning:bitcoin`)
+
 ## 機能
 
 - **GET /test/uuid**: Lightning 支払いが必要なエンドポイント
@@ -104,9 +106,9 @@ echo "eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIlBBWU1FTlQtU0lHTkFUVVJFIGhlYWRlciBpcy
   },
   "accepts": [
     {
-      "scheme": "lightning",
-      "network": "bitcoin",
-      "amount": "100",
+      "scheme": "exact",
+      "network": "lightning:bitcoin",
+      "amount": "100000",
       "asset": "BTC",
       "maxTimeoutSeconds": 3600,
       "extra": {
@@ -134,10 +136,14 @@ PAYMENT_PAYLOAD=$(cat <<EOF | jq -c | base64 -w0
     "mimeType": "application/json"
   },
   "accepted": {
-    "scheme": "lightning",
-    "network": "bitcoin",
-    "amount": "100",
-    "asset": "BTC"
+    "scheme": "exact",
+    "network": "lightning:bitcoin",
+    "amount": "100000",
+    "asset": "BTC",
+    "maxTimeoutSeconds": 3600,
+    "extra": {
+      "invoice": "lnbc1..."
+    }
   },
   "payload": {
     "invoice": "lnbc1..."
@@ -154,7 +160,7 @@ curl -i http://localhost:8787/test/uuid \
 ```
 HTTP/1.1 200 OK
 Content-Type: application/json
-PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImJpdGNvaW4iLCJwYXllciI6ImFub255bW91cyIsImV4dHJhIjp7Imlud29pY2UiOiJsbmJjMS4uLiIsInNldHRsZWRBdCI6MTczOTExNjgwMH19
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImxpZ2h0bmluZzpiaXRjb2luIiwicGF5ZXIiOiJhbm9ueW1vdXMiLCJleHRyYSI6eyJpbnZvaWNlIjoibG5iYzEuLi4iLCJzZXR0bGVkQXQiOjE3MzkxMTY4MDB9fQ==
 
 {"uuid":"550e8400-e29b-41d4-a716-446655440000"}
 ```

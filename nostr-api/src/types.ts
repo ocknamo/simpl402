@@ -68,8 +68,8 @@ export interface X402SettlementResponse {
  * Lightning Network payment method (extends X402PaymentMethod)
  */
 export interface LightningPaymentMethod extends X402PaymentMethod {
-	scheme: 'lightning';
-	network: 'bitcoin';
+	scheme: 'exact';
+	network: 'lightning:bitcoin';
 	asset: 'BTC';
 	extra: {
 		invoice: string;

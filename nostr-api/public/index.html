@@ -62,16 +62,6 @@
 				text-align: center;
 				color: #777;
 			}
-			.award {
-				background: #e3f2fd;
-				padding: 1rem;
-				border-left: 4px solid #2196f3;
-				margin: 1rem 0;
-				font-size: large;
-				font-weight: bold;
-				color: #0d47a1;
-				font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-			}
 		</style>
 	</head>
 	<body>
@@ -82,20 +72,130 @@
 		</p>
 
 		<h2>API エンドポイント</h2>
+		
+		<div class="endpoint">
+			<strong>GET /test/uuid</strong>
+			<p>Lightning 支払い検証後に UUID v4 を返します。</p>
+		</div>
 
 		<div class="endpoint">
 			<strong>POST /nostr/badge-challenge</strong>
 			<p>Lightning 支払い検証後に NIP-58 バッジを発行します。</p>
 		</div>
 
-		<h2>simpl402チャレンジ</h2>
+		<h2>使い方</h2>
+		
+		<h3>1. 初回リクエスト <span class="status-badge status-402">402 Payment Required</span></h3>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -d '{"npub":"npub1xxxxxxx9dzc"}'</code></pre>
+		<p>レスポンスに x402 v2 形式の <code>PAYMENT-REQUIRED</code> ヘッダーが返されます。</p>
+		<pre><code>HTTP/1.1 402 Payment Required
+Content-Type: application/json
+PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwgImVycm9yIjogIi4uLiIsICJyZXNvdXJjZSI6IHsuLi59LCAiYWNjZXB0cyI6IFt7Li4ufV19
+
+{"error":"Payment required"}</code></pre>
+
+		<h3>2. PAYMENT-REQUIRED のデコード</h3>
+		<pre><code>echo "eyJ4NDAyVmVyc2lvbiI6Mi4uLiJ9" | base64 -d | jq</code></pre>
+		<p>x402 v2 形式のペイロード：</p>
+		<pre><code>{
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {
+    "url": "https://simpl402.ocknamo.com/nostr/badge-challenge",
+    "description": "Issue a NIP-58 badge award",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "lightning:bitcoin",
+      "amount": "100000",
+      "asset": "BTC",
+      "maxTimeoutSeconds": 3600,
+      "extra": {
+        "invoice": "lnbc1..."
+      }
+    }
+  ]
+}</code></pre>
+
+		<h3>3. Invoice の支払い</h3>
+		<p><code>accepts[0].extra.invoice</code> の値を Lightning ウォレットで支払います（100 sats固定）。</p>
+
+		<h3>3.5. PAYMENT-SIGNATURE ペイロードの構築</h3>
+		<p>支払い後、x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを構築します。</p>
+		<p>構築されたペイロードの中身（Base64デコード前）：</p>
+		<pre><code>{
+  "x402Version": 2,
+  "resource": {
+    "url": "https://simpl402.ocknamo.com/nostr/badge-challenge",
+    "description": "Issue a NIP-58 badge award",
+    "mimeType": "application/json"
+  },
+  "accepted": {
+    "scheme": "exact",
+    "network": "lightning:bitcoin",
+    "amount": "100000",
+    "asset": "BTC",
+    "maxTimeoutSeconds": 3600,
+    "extra": {
+      "invoice": "lnbc1..."
+    }
+  },
+  "payload": {
+    "invoice": "lnbc1..."
+  }
+}</code></pre>
+
+		<h3>4. 支払い後のアクセス <span class="status-badge status-200">200 OK</span></h3>
+		<p>x402 v2 形式の <code>PAYMENT-SIGNATURE</code> ヘッダーを送信：</p>
+		<pre><code>curl -i -X POST https://simpl402.ocknamo.com/nostr/badge-challenge \
+  -H "Content-Type: application/json" \
+  -H "PAYMENT-SIGNATURE: eyJ4NDAyVmVyc2lvbiI6MiwgInJlc291cmNlIjogey4uLn0sICJhY2NlcHRlZCI6IHsuLi59LCAicGF5bG9hZCI6IHsuLi59fQ==" \
+  -d '{"npub":"npub1xxxxxxx9dzc"}'</code></pre>
+		<p>支払い検証後、<code>PAYMENT-RESPONSE</code> ヘッダーと共にバッジ発行結果が返されます：</p>
+		<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlLCJ0cmFuc2FjdGlvbiI6ImxuYmMxLi4uIiwibmV0d29yayI6ImxpZ2h0bmluZzpiaXRjb2luIiwicGF5ZXIiOiJhbm9ueW1vdXMiLCJleHRyYSI6eyJpbnZvaWNlIjoibG5iYzEuLi4iLCJzZXR0bGVkQXQiOjE3MzkxMTY4MDB9fQ==
+
+{"success":true,"eventId":"abc123...","message":"Badge awarded successfully"}</code></pre>
+
+		<h2>x402 v2 ヘッダー</h2>
+		<ul>
+			<li><strong>PAYMENT-REQUIRED</strong>: サーバーが支払い要求を送信（resource、accepts配列を含む）</li>
+			<li><strong>PAYMENT-SIGNATURE</strong>: クライアントが支払い情報を送信（x402Version、resource、accepted、payloadを含む）</li>
+			<li><strong>PAYMENT-RESPONSE</strong>: サーバーが決済結果を返却（success、transaction、errorReasonなどを含む）</li>
+		</ul>
+
+		<h2>セキュリティ</h2>
+		<ul>
+			<li>各 invoice は一度のみ使用可能</li>
+			<li>期限切れ invoice は自動的に拒否</li>
+			<li>coinos.io Lightning ノードで支払い検証</li>
+			<li>x402 v2 仕様に完全準拠</li>
+		</ul>
+
+		<h2>技術スタック</h2>
+		<ul>
+			<li><a href="https://github.com/coinbase/x402/blob/main/specs/transports-v2/http.md"> x402 HTTP Transport Specification v2</a></li>
+			<li>Cloudflare Workers</li>
+			<li>Lightning Network（<a href="https://coinos.io">coinos.io API</a>）</li>
+			<li>TypeScript</li>
+		</ul>
+
+		<hr />
+		<h2>終了したイベント</h2>
+		<h3>simpl402チャレンジ</h3>
 
 		<img src="https://image.nostr.build/b35c5e0916bd860cae645bddf73a4e1e178db452b1802221a4de744f9b489fa4.png" alt="success badge" width="200" />
 
 		<div>
 			<p>
-				現在、<strong>simpl402チャレンジ</strong> を開催中です(2026-02-16~)。API を呼び出して Lightning 支払いを完了すると、NIP-58 バッジが発行されます。
+				<s>現在、<strong>simpl402チャレンジ</strong> を開催中です(2026-02-16~)。API を呼び出して Lightning 支払いを完了すると、NIP-58 バッジが発行されます。</s>
 			</p>
+			<p>終了しました。</p>
 			<p>このチャレンジの目的は、ライトニングネットワークとx402プロトコルがAIによる支払いに本当に適しているのか試すこと。
 				AIに向いているということは詳細なAPIドキュメントを読み込ませてコンテキストを消費しなくても利用できるということですよね？</p>
 			<p>OpenClawなどを駆使してエンドポイントの情報のみでバッジを獲得できるか挑戦してみてください!!</p>
@@ -113,14 +213,15 @@
 			</div>
 		</div>
 
-		<h2>simpl402 Challenge (English)</h2>
+		<h3>simpl402 Challenge (English)</h3>
 
 		<img src="https://image.nostr.build/b35c5e0916bd860cae645bddf73a4e1e178db452b1802221a4de744f9b489fa4.png" alt="success badge" width="200" />
 
 		<div>
 			<p>
-				We are currently hosting the <strong>simpl402 Challenge</strong> (from 2026-02-16). When you call the API and complete a Lightning payment, a NIP-58 badge will be issued.
+				<s>We are currently hosting the <strong>simpl402 Challenge</strong> (from 2026-02-16). When you call the API and complete a Lightning payment, a NIP-58 badge will be issued.</s>
 			</p>
+			<p>Finished!</p>
 			<p>The purpose of this challenge is to test whether the Lightning Network and the x402 protocol are truly suitable for AI-driven payments.
 				Being suitable for AI means it should be usable without consuming context by reading detailed API documentation, right?</p>
 			<p>Use tools like OpenClaw to try obtaining the badge with only the endpoint information!!</p>

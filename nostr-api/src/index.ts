@@ -78,9 +78,14 @@ async function handleUuidEndpoint(request: Request, env: Env): Promise<Response>
 			return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
 		}
 
-		// Validate payment method is Lightning
-		if (paymentPayload.accepted.scheme !== 'lightning') {
+		// Validate payment scheme is exact
+		if (paymentPayload.accepted.scheme !== 'exact') {
 			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
+		}
+
+		// Validate network is Lightning
+		if (!paymentPayload.accepted.network.startsWith('lightning:')) {
+			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
 		}
 
 		// Extract Lightning-specific payload
@@ -268,9 +273,14 @@ async function handleBadgeChallengeEndpoint(
 			return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
 		}
 
-		// Validate payment method is Lightning
-		if (paymentPayload.accepted.scheme !== 'lightning') {
+		// Validate payment scheme is exact
+		if (paymentPayload.accepted.scheme !== 'exact') {
 			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
+		}
+
+		// Validate network is Lightning
+		if (!paymentPayload.accepted.network.startsWith('lightning:')) {
+			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
 		}
 
 		// Extract Lightning-specific payload

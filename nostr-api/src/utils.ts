@@ -47,8 +47,8 @@ export function createLightningPaymentMethod(
 	expirySeconds: number
 ): LightningPaymentMethod {
 	return {
-		scheme: 'lightning',
-		network: 'bitcoin',
+		scheme: 'exact',
+		network: 'lightning:bitcoin',
 		amount: (amountSats * 1000).toString(), // Convert sats to millisatoshis
 		asset: 'BTC',
 		maxTimeoutSeconds: expirySeconds,
@@ -81,7 +81,7 @@ export function createSuccessSettlement(invoice: string): X402SettlementResponse
 	return {
 		success: true,
 		transaction: invoice,
-		network: 'bitcoin',
+		network: 'lightning:bitcoin',
 		payer: 'anonymous',
 		extra: {
 			invoice: invoice,
@@ -97,6 +97,6 @@ export function createFailureSettlement(errorReason: string): X402SettlementResp
 	return {
 		success: false,
 		errorReason,
-		network: 'bitcoin',
+		network: 'lightning:bitcoin',
 	};
 }

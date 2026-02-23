@@ -252,7 +252,7 @@ echo "$BADGE_PAYMENT_RESPONSE" | base64 -d | jq .
 {
   "success": true,
   "transaction": "lnbc1...",
-  "network": "bitcoin",
+  "network": "lightning:bitcoin",
   "payer": "anonymous",
   "extra": {
     "invoice": "lnbc1...",
@@ -266,7 +266,7 @@ echo "$BADGE_PAYMENT_RESPONSE" | base64 -d | jq .
 {
   "success": false,
   "errorReason": "invoice_already_used",
-  "network": "bitcoin"
+  "network": "lightning:bitcoin"
 }
 ```
 

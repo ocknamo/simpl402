@@ -2,6 +2,11 @@
 
 このドキュメントでは、x402 over Lightning Network + NIP-58 Badge Award APIの動作確認手順の概要を説明します。
 
+## ドキュメント情報
+- x402 Version: v2
+- Scheme: exact
+- 最終更新日: 2026-02-23
+
 ## 前提条件
 
 - 開発サーバーが起動していること (`npm run dev`)
@@ -102,9 +107,13 @@ cd /home/yoshiki/workspace/ln/simpl402/nostr-api
 
 x402で保護された UUID v4 生成エンドポイントのテストです。
 
+**x402 Version:** v2 (exact scheme)
+
 **確認できる機能:**
 - 402 Payment Requiredレスポンス
-- PAYMENT-REQUIREDヘッダー（x402 v2形式）
+- PAYMENT-REQUIREDヘッダー（x402 v2 exact scheme）
+  - `scheme: "exact"`
+  - `network: "lightning:bitcoin"`
 - PAYMENT-SIGNATUREヘッダー
 - PAYMENT-RESPONSEヘッダー
 - Lightning Network支払い検証
@@ -120,6 +129,8 @@ x402で保護された UUID v4 生成エンドポイントのテストです。
 ### [テストケース2: POST /nostr/badge-challenge (NIP-58 Badge Award)](./test/test-case-2.md)
 
 支払い後にNIP-58バッジを発行するエンドポイントのテストです。
+
+**x402 Version:** v2 (exact scheme)
 
 **デフォルトテスト用npub:**
 ```bash
@@ -194,6 +205,44 @@ Not Found
 3. ✅ 支払いハッシュ検証
 
 すべての確認項目が期待通りの結果になれば、APIは正常に動作しています！
+
+---
+
+## 重要な注意点
+
+### x402 v2 Exact Schemeについて
+このAPIは x402 v2 **exact scheme** を使用しています。PAYMENT-REQUIREDヘッダーの形式は以下の通りです：
+
+```json
+{
+  "x402Version": 2,
+  "resource": {
+    "url": "http://...",
+    "description": "...",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "lightning:bitcoin",
+      "amount": "100000",
+      "asset": "BTC",
+      "maxTimeoutSeconds": 3600,
+      "extra": {
+        "invoice": "lnbc1..."
+      }
+    }
+  ]
+}
+```
+
+- `scheme: "exact"` - 正確な金額決済スキーム
+- `network: "lightning:bitcoin"` - Lightning Network over Bitcoin
+
+### インボイスの保持について
+実際の支払いテストを行う場合（test-case-1.mdの1-7, 1-8）、インボイスを一時ファイルに保存する必要があります。これにより、ユーザーが支払ったインボイスと検証に使用するインボイスが同じであることを保証します。
+
+詳細は `test/test-case-1.md` を参照してください。
 
 ---
 

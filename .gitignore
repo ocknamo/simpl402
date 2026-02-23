@@ -165,3 +165,7 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+# Test invoice files (temporary files for payment testing)
+nostr-api/test/test_invoice*.txt
+test_invoice*.txt

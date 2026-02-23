@@ -59,8 +59,8 @@ echo "$PAYMENT_REQUIRED" | base64 -d | jq .
   },
   "accepts": [
     {
-      "scheme": "lightning",
-      "network": "bitcoin",
+      "scheme": "exact",
+      "network": "lightning:bitcoin",
       "amount": "100000",
       "asset": "BTC",
       "maxTimeoutSeconds": 3600,
@@ -157,7 +157,7 @@ echo "$PAYMENT_RESPONSE" | base64 -d | jq .
 {
   "success": false,
   "errorReason": "payment_not_confirmed",
-  "network": "bitcoin"
+  "network": "lightning:bitcoin"
 }
 ```
 
@@ -165,16 +165,61 @@ echo "$PAYMENT_RESPONSE" | base64 -d | jq .
 
 ## 1-7. 実際の支払い後の検証（オプション）
 
-Lightning Walletでインボイスを支払った後、同じPAYMENT-SIGNATUREで再度アクセスします。
+Lightning Walletでインボイスを支払った後、バッジが発行されることを確認します。
+
+**重要:** 実際の支払いテストを行う場合、インボイスを一時ファイルに保存する必要があります。これにより、ユーザーが支払ったインボイスと検証に使用するインボイスが同じであることを保証します。
+
+### ステップ1: インボイスの取得と保存
 
 ```bash
-# Lightning Walletで$INVOICEを支払う
-echo "Please pay this invoice with your Lightning Wallet:"
+# インボイスを取得して保存
+PAYMENT_REQUIRED=$(curl -s -i http://localhost:8787/test/uuid | \
+  grep -i "payment-required:" | cut -d' ' -f2 | tr -d '\r')
+echo "$PAYMENT_REQUIRED" > test_invoice_payload.txt
+
+INVOICE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -r '.accepts[0].extra.invoice')
+echo "$INVOICE" > test_invoice.txt
+```
+
+### ステップ2: 支払いの実行
+
+```bash
+echo "============================================"
+echo "請求書 (Lightning Invoice)"
+echo "============================================"
+echo ""
 echo "$INVOICE"
 echo ""
+echo "============================================"
+echo "金額: 100 sats"
+echo "有効期限: 1時間"
+echo "============================================"
+echo ""
 read -p "Press Enter after payment is complete..."
+```
 
-# 支払い後、同じPAYMENT-SIGNATUREで再度アクセス
+### ステップ3: 支払い後の検証（保存したインボイスを使用）
+
+```bash
+# 保存したインボイスを使用して検証
+PAYMENT_REQUIRED=$(cat test_invoice_payload.txt)
+INVOICE=$(cat test_invoice.txt)
+RESOURCE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
+ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+
+PAYMENT_PAYLOAD=$(jq -n \
+  --argjson resource "$RESOURCE" \
+  --argjson accepted "$ACCEPTED" \
+  --arg invoice "$INVOICE" \
+  '{
+    x402Version: 2,
+    resource: $resource,
+    accepted: $accepted,
+    payload: {
+      invoice: $invoice
+    }
+  }' | base64 -w0)
+
 curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```
@@ -193,13 +238,34 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlL...
 - `PAYMENT-RESPONSE` ヘッダーに成功レスポンスが含まれる
 - レスポンスボディに `uuid` が含まれる（UUID v4形式）
 
+**注意:** インボイスをファイルに保存せずに、毎回 `curl` で新しいインボイスを取得すると、ユーザーが支払ったインボイスと異なるものが使われてしまうため、必ずインボイスを保存してください。
+
 ---
 
 ## 1-8. インボイスの再利用防止の確認
 
-同じ支払い済みPAYMENT-SIGNATUREで再度アクセスします。
+保存したインボイスを使用して、インボイスの再利用が防止されていることを確認します。
 
 ```bash
+# 保存したインボイスを再利用
+PAYMENT_REQUIRED=$(cat test_invoice_payload.txt)
+INVOICE=$(cat test_invoice.txt)
+RESOURCE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
+ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+
+PAYMENT_PAYLOAD=$(jq -n \
+  --argjson resource "$RESOURCE" \
+  --argjson accepted "$ACCEPTED" \
+  --arg invoice "$INVOICE" \
+  '{
+    x402Version: 2,
+    resource: $resource,
+    accepted: $accepted,
+    payload: {
+      invoice: $invoice
+    }
+  }' | base64 -w0)
+
 curl -i http://localhost:8787/test/uuid \
   -H "PAYMENT-SIGNATURE: $PAYMENT_PAYLOAD"
 ```

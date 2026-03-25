@@ -33,7 +33,7 @@ export interface X402PaymentMethod {
  */
 export interface X402PaymentRequired {
 	x402Version: 2;
-	error: string;
+	error?: string;
 	resource: X402Resource;
 	accepts: X402PaymentMethod[];
 }
@@ -69,9 +69,11 @@ export interface X402SettlementResponse {
  */
 export interface LightningPaymentMethod extends X402PaymentMethod {
 	scheme: 'exact';
-	network: 'lightning:bitcoin';
+	network: 'bip122:000000000019d6689c085ae165831e93' | 'bip122:000000000933ea01ad0ee984209779ba';
 	asset: 'BTC';
+  payTo: 'anonymous';
 	extra: {
+		paymentMethod: 'lightning';
 		invoice: string;
 	};
 }

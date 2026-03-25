@@ -3,7 +3,7 @@
  */
 
 import { decode } from 'light-bolt11-decoder';
-import type { CoinosInvoiceResponse, CoinosPaymentResponse, DecodedInvoice } from './types';
+import type { CoinosInvoiceResponse, DecodedInvoice } from './types';
 
 /**
  * Create a Lightning invoice using coinos.io API

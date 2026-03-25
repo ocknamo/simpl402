@@ -19,8 +19,9 @@ import {
 	createSuccessSettlement,
 	createFailureSettlement,
 } from './utils';
-import type { X402PaymentPayload, X402SettlementResponse, LightningPaymentPayload } from './types';
+import type { X402PaymentPayload, LightningPaymentPayload } from './types';
 import { npubToHex, nsecToHex, createBadgeAwardEvent, signEvent, getPublicKey, publishToRelays } from './nostr';
+import { MAINNET_BTC_NETWORK_ID, SCHEME_EXACT } from './constants';
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
@@ -79,12 +80,12 @@ async function handleUuidEndpoint(request: Request, env: Env): Promise<Response>
 		}
 
 		// Validate payment scheme is exact
-		if (paymentPayload.accepted.scheme !== 'exact') {
+		if (paymentPayload.accepted.scheme !== SCHEME_EXACT) {
 			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
 		}
 
-		// Validate network is Lightning
-		if (!paymentPayload.accepted.network.startsWith('lightning:')) {
+		// Validate network is mainnet btc
+		if (paymentPayload.accepted.network !== MAINNET_BTC_NETWORK_ID) {
 			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
 		}
 
@@ -96,13 +97,29 @@ async function handleUuidEndpoint(request: Request, env: Env): Promise<Response>
 			return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
 		}
 
+		// Verify `payload.invoice` matches `payload.accepted.extra.invoice` exactly
+		if (invoice !== paymentPayload.accepted.extra?.invoice) {
+			return createErrorResponse('Invoice in payload does not match accepted invoice', 400, 'invoice_mismatch');
+		}
+
 		// Decode invoice to get payment hash for dedup
 		const decoded = decodeBolt11(invoice);
 
-		// Check if invoice is expired
+		// Verify the invoice has not expired (check current time against invoice timestamp + expiry).
 		const now = Math.floor(Date.now() / 1000);
 		if (decoded.timeExpireDate < now) {
 			return createErrorResponse('Invoice expired', 402, 'invoice_expired');
+		}
+
+		// Verify the invoice amount matches `requirements.amount` exactly.
+		const acceptedAmountSats = parseInt(paymentPayload.accepted.amount) / 1000; // Convert millisats to sats
+		const expectedAmountSats = parseInt(env.INVOICE_AMOUNT_SATS);
+		if (decoded.satoshis !== expectedAmountSats || decoded.satoshis !== acceptedAmountSats) {
+			return createErrorResponse(
+				'Invoice amount does not match required amount',
+				400,
+				'invoice_amount_mismatch'
+			);
 		}
 
 		// Check if invoice has already been used
@@ -113,6 +130,8 @@ async function handleUuidEndpoint(request: Request, env: Env): Promise<Response>
 		}
 
 		// Verify payment with Lightning node
+		// Query the Lightning wallet API or Lightning node to verify the invoice has been paid. 
+		// If the payment is still in-flight (HTLC locked but not yet settled), the server SHOULD respond with `402` and a `Retry-After` header indicating when the client should retry.
 		const apiKey = env.COINOS_API_KEY;
 		if (!apiKey) {
 			return new Response('Server configuration error: API key not set', { status: 500 });
@@ -148,7 +167,7 @@ async function handleUuidEndpoint(request: Request, env: Env): Promise<Response>
 		await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
 
 		// Payment verified - return a UUID v4 with PAYMENT-RESPONSE header
-		const settlementResponse = createSuccessSettlement(invoice);
+		const settlementResponse = createSuccessSettlement(invoice, decoded.paymentHash);
 
 		// Generate UUID v4
 		const uuid = crypto.randomUUID();
@@ -207,6 +226,7 @@ async function requirePayment(request: Request, env: Env, customAmountSats?: num
 /**
  * Handle /nostr/badge-challenge endpoint with x402 payment protection (100 sats)
  * Awards NIP-58 badge to the provided npub after payment verification
+ * **This is an experimental feature.** It is probably safer to use it only with simple GET methods.
  */
 async function handleBadgeChallengeEndpoint(
 	request: Request,
@@ -274,7 +294,7 @@ async function handleBadgeChallengeEndpoint(
 		}
 
 		// Validate payment scheme is exact
-		if (paymentPayload.accepted.scheme !== 'exact') {
+		if (paymentPayload.accepted.scheme !== SCHEME_EXACT) {
 			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
 		}
 

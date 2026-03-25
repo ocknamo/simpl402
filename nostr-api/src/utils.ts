@@ -2,6 +2,7 @@
  * Utility functions for x402 protocol
  */
 
+import { MAINNET_BTC_NETWORK_ID, SCHEME_EXACT } from './constants';
 import type { X402Resource, X402PaymentMethod, X402PaymentRequired, X402SettlementResponse, LightningPaymentMethod } from './types';
 
 /**
@@ -47,12 +48,14 @@ export function createLightningPaymentMethod(
 	expirySeconds: number
 ): LightningPaymentMethod {
 	return {
-		scheme: 'exact',
-		network: 'lightning:bitcoin',
+		scheme: SCHEME_EXACT,
+		network: MAINNET_BTC_NETWORK_ID,
 		amount: (amountSats * 1000).toString(), // Convert sats to millisatoshis
 		asset: 'BTC',
+		payTo: 'anonymous',
 		maxTimeoutSeconds: expirySeconds,
 		extra: {
+			paymentMethod: 'lightning',
 			invoice: invoice,
 		},
 	};
@@ -64,24 +67,24 @@ export function createLightningPaymentMethod(
 export function createPaymentRequired(
 	resource: X402Resource,
 	accepts: X402PaymentMethod[],
-	error: string = 'Payment required'
+	error?: string,
 ): X402PaymentRequired {
 	return {
 		x402Version: 2,
-		error,
 		resource,
 		accepts,
+		error,
 	};
 }
 
 /**
  * Create x402 SettlementResponse for success
  */
-export function createSuccessSettlement(invoice: string): X402SettlementResponse {
+export function createSuccessSettlement(invoice: string, paymentHash: string): X402SettlementResponse {
 	return {
 		success: true,
-		transaction: invoice,
-		network: 'lightning:bitcoin',
+		transaction: paymentHash,
+		network: MAINNET_BTC_NETWORK_ID,
 		payer: 'anonymous',
 		extra: {
 			invoice: invoice,
@@ -97,6 +100,6 @@ export function createFailureSettlement(errorReason: string): X402SettlementResp
 	return {
 		success: false,
 		errorReason,
-		network: 'lightning:bitcoin',
+		network: MAINNET_BTC_NETWORK_ID,
 	};
 }

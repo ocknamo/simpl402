@@ -60,11 +60,13 @@ echo "$PAYMENT_REQUIRED" | base64 -d | jq .
   "accepts": [
     {
       "scheme": "exact",
-      "network": "lightning:bitcoin",
+      "network": "bip122:000000000019d6689c085ae165831e93",
       "amount": "100000",
       "asset": "BTC",
+      "payTo": "anonymous",
       "maxTimeoutSeconds": 3600,
       "extra": {
+        "paymentMethod": "lightning",
         "invoice": "lnbc1..."
       }
     }

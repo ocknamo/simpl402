@@ -224,11 +224,13 @@ Not Found
   "accepts": [
     {
       "scheme": "exact",
-      "network": "lightning:bitcoin",
+      "network": "bip122:000000000019d6689c085ae165831e93",
       "amount": "100000",
       "asset": "BTC",
+      "payTo": "anonymous",
       "maxTimeoutSeconds": 3600,
       "extra": {
+        "paymentMethod": "lightning",
         "invoice": "lnbc1..."
       }
     }
@@ -237,7 +239,7 @@ Not Found
 ```
 
 - `scheme: "exact"` - 正確な金額決済スキーム
-- `network: "lightning:bitcoin"` - Lightning Network over Bitcoin
+- `network: "bip122:000000000019d6689c085ae165831e93"` - Bitcoin
 
 ### インボイスの保持について
 実際の支払いテストを行う場合（test-case-1.mdの1-7, 1-8）、インボイスを一時ファイルに保存する必要があります。これにより、ユーザーが支払ったインボイスと検証に使用するインボイスが同じであることを保証します。

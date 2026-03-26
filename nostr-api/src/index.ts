@@ -298,8 +298,8 @@ async function handleBadgeChallengeEndpoint(
 			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
 		}
 
-		// Validate network is Lightning
-		if (!paymentPayload.accepted.network.startsWith('lightning:')) {
+		// Validate network is mainnet btc
+		if (paymentPayload.accepted.network !== MAINNET_BTC_NETWORK_ID) {
 			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
 		}
 
@@ -309,6 +309,11 @@ async function handleBadgeChallengeEndpoint(
 
 		if (!invoice) {
 			return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
+		}
+
+		// Verify `payload.invoice` matches `payload.accepted.extra.invoice` exactly
+		if (invoice !== paymentPayload.accepted.extra?.invoice) {
+			return createErrorResponse('Invoice in payload does not match accepted invoice', 400, 'invoice_mismatch');
 		}
 
 		// Decode invoice to get payment hash for dedup
@@ -405,7 +410,7 @@ async function handleBadgeChallengeEndpoint(
 		);
 
 		// Return success response immediately
-		const settlementResponse = createSuccessSettlement(invoice);
+		const settlementResponse = createSuccessSettlement(invoice, decoded.paymentHash);
 
 		const response = {
 			success: true,

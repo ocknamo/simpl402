@@ -141,7 +141,7 @@ echo "Badge Invoice: $BADGE_INVOICE"
 
 # PAYMENT-SIGNATUREペイロードを作成
 BADGE_RESOURCE=$(echo "$BADGE_PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
-BADGE_ACCEPTED=$(echo "$BADGE_PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+BADGE_ACCEPTED=$(echo "$BADGE_PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0]')
 
 BADGE_PAYMENT_PAYLOAD=$(jq -n \
   --argjson resource "$BADGE_RESOURCE" \

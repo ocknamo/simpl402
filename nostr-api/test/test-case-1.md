@@ -100,7 +100,7 @@ x402 v2形式のPAYMENT-SIGNATUREペイロードを作成します。
 ```bash
 # PAYMENT-REQUIREDから必要な情報を抽出
 RESOURCE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
-ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0]')
 
 # PAYMENT-SIGNATUREペイロードを作成
 PAYMENT_PAYLOAD=$(jq -n \
@@ -207,7 +207,7 @@ read -p "Press Enter after payment is complete..."
 PAYMENT_REQUIRED=$(cat test_invoice_payload.txt)
 INVOICE=$(cat test_invoice.txt)
 RESOURCE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
-ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0]')
 
 PAYMENT_PAYLOAD=$(jq -n \
   --argjson resource "$RESOURCE" \
@@ -253,7 +253,7 @@ PAYMENT-RESPONSE: eyJzdWNjZXNzIjp0cnVlL...
 PAYMENT_REQUIRED=$(cat test_invoice_payload.txt)
 INVOICE=$(cat test_invoice.txt)
 RESOURCE=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.resource')
-ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0] | del(.extra)')
+ACCEPTED=$(echo "$PAYMENT_REQUIRED" | base64 -d | jq -c '.accepts[0]')
 
 PAYMENT_PAYLOAD=$(jq -n \
   --argjson resource "$RESOURCE" \

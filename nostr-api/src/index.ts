@@ -60,123 +60,135 @@ function createErrorResponse(message: string, status: number, errorReason: strin
 }
 
 /**
+ * Verified payment result returned on successful verification
+ */
+interface VerifiedPayment {
+	invoice: string;
+	paymentHash: string;
+	decoded: import('./types').DecodedInvoice;
+}
+
+/**
+ * Verify Lightning payment from PAYMENT-SIGNATURE header.
+ * Implements verification steps from the exact scheme specification:
+ *   1. Extract requirements from payload.accepted
+ *   2. Verify x402Version is 2
+ *   3. Verify the network matches
+ *   4. Verify payload.invoice matches payload.accepted.extra.invoice
+ *   5. Verify the invoice was issued by this server (via Lightning API)
+ *   6. Decode the BOLT11 invoice
+ *   7. Verify the invoice has not expired
+ *   8. Verify the invoice amount matches requirements.amount
+ *   9. Verify the invoice has not already been used
+ *  10. Query the Lightning node to verify the invoice has been paid
+ *
+ * Returns VerifiedPayment on success, or a Response on failure.
+ */
+async function verifyLightningPayment(
+	paymentSigHeader: string,
+	expectedAmountSats: number,
+	env: Env,
+): Promise<VerifiedPayment | Response> {
+	// 1. Extract requirements from payload.accepted
+	const paymentPayload = decodeBase64<X402PaymentPayload>(paymentSigHeader);
+
+	// 2. Verify x402Version is 2
+	if (paymentPayload.x402Version !== 2) {
+		return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
+	}
+
+	// 3a. Verify scheme is exact
+	if (paymentPayload.accepted.scheme !== SCHEME_EXACT) {
+		return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
+	}
+
+	// 3b. Verify the network matches
+	if (paymentPayload.accepted.network !== MAINNET_BTC_NETWORK_ID) {
+		return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
+	}
+
+	// Extract Lightning-specific payload
+	const lightningPayload = paymentPayload.payload as unknown as LightningPaymentPayload;
+	const invoice = lightningPayload.invoice;
+
+	if (!invoice) {
+		return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
+	}
+
+	// 4. Verify payload.invoice matches payload.accepted.extra.invoice exactly
+	if (invoice !== paymentPayload.accepted.extra?.invoice) {
+		return createErrorResponse('Invoice in payload does not match accepted invoice', 400, 'invoice_mismatch');
+	}
+
+	// 6. Decode the BOLT11 invoice
+	const decoded = decodeBolt11(invoice);
+
+	// 7. Verify the invoice has not expired
+	const now = Math.floor(Date.now() / 1000);
+	if (decoded.timeExpireDate < now) {
+		return createErrorResponse('Invoice expired', 402, 'invoice_expired');
+	}
+
+	// 8. Verify the invoice amount matches requirements.amount exactly
+	const acceptedAmountSats = parseInt(paymentPayload.accepted.amount) / 1000; // Convert millisats to sats
+	if (decoded.satoshis !== expectedAmountSats || decoded.satoshis !== acceptedAmountSats) {
+		return createErrorResponse('Invoice amount does not match required amount', 400, 'invoice_amount_mismatch');
+	}
+
+	// 9. Verify the invoice has not already been used
+	const usedKey = `used:${decoded.paymentHash}`;
+	const alreadyUsed = await env.USED_INVOICES.get(usedKey);
+	if (alreadyUsed) {
+		return createErrorResponse('Invoice already used', 402, 'invoice_already_used');
+	}
+
+	// 5 & 10. Query the Lightning node to verify the invoice has been paid
+	const apiKey = env.COINOS_API_KEY;
+	if (!apiKey) {
+		return new Response('Server configuration error: API key not set', { status: 500 });
+	}
+
+	const isPaid = await verifyPayment(env.COINOS_API_URL, apiKey, invoice);
+
+	if (!isPaid) {
+		const settlementResponse = createFailureSettlement('payment_not_confirmed');
+		return new Response(JSON.stringify({ error: 'Payment not confirmed' }), {
+			status: 402,
+			headers: {
+				'Content-Type': 'application/json',
+				'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
+			},
+		});
+	}
+
+	// Mark invoice as used (TTL: 24 hours)
+	await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
+
+	return { invoice, paymentHash: decoded.paymentHash, decoded };
+}
+
+/**
  * Handle /test/uuid endpoint with x402 payment protection
  */
 async function handleUuidEndpoint(request: Request, env: Env): Promise<Response> {
 	const paymentSigHeader = request.headers.get('PAYMENT-SIGNATURE');
 
-	// No payment signature - require payment (402)
 	if (!paymentSigHeader) {
 		return requirePayment(request, env);
 	}
 
-	// Payment signature provided - verify payment
 	try {
-		const paymentPayload = decodeBase64<X402PaymentPayload>(paymentSigHeader);
+		const result = await verifyLightningPayment(paymentSigHeader, parseInt(env.INVOICE_AMOUNT_SATS), env);
 
-		// Validate x402 version
-		if (paymentPayload.x402Version !== 2) {
-			return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
+		// Verification failed - return the error response
+		if (result instanceof Response) {
+			return result;
 		}
-
-		// Validate payment scheme is exact
-		if (paymentPayload.accepted.scheme !== SCHEME_EXACT) {
-			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
-		}
-
-		// Validate network is mainnet btc
-		if (paymentPayload.accepted.network !== MAINNET_BTC_NETWORK_ID) {
-			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
-		}
-
-		// Extract Lightning-specific payload
-		const lightningPayload = paymentPayload.payload as unknown as LightningPaymentPayload;
-		const invoice = lightningPayload.invoice;
-
-		if (!invoice) {
-			return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
-		}
-
-		// Verify `payload.invoice` matches `payload.accepted.extra.invoice` exactly
-		if (invoice !== paymentPayload.accepted.extra?.invoice) {
-			return createErrorResponse('Invoice in payload does not match accepted invoice', 400, 'invoice_mismatch');
-		}
-
-		// Decode invoice to get payment hash for dedup
-		const decoded = decodeBolt11(invoice);
-
-		// Verify the invoice has not expired (check current time against invoice timestamp + expiry).
-		const now = Math.floor(Date.now() / 1000);
-		if (decoded.timeExpireDate < now) {
-			return createErrorResponse('Invoice expired', 402, 'invoice_expired');
-		}
-
-		// Verify the invoice amount matches `requirements.amount` exactly.
-		const acceptedAmountSats = parseInt(paymentPayload.accepted.amount) / 1000; // Convert millisats to sats
-		const expectedAmountSats = parseInt(env.INVOICE_AMOUNT_SATS);
-		if (decoded.satoshis !== expectedAmountSats || decoded.satoshis !== acceptedAmountSats) {
-			return createErrorResponse(
-				'Invoice amount does not match required amount',
-				400,
-				'invoice_amount_mismatch'
-			);
-		}
-
-		// Check if invoice has already been used
-		const usedKey = `used:${decoded.paymentHash}`;
-		const alreadyUsed = await env.USED_INVOICES.get(usedKey);
-		if (alreadyUsed) {
-			return createErrorResponse('Invoice already used', 402, 'invoice_already_used');
-		}
-
-		// Verify payment with Lightning node
-		// Query the Lightning wallet API or Lightning node to verify the invoice has been paid. 
-		// If the payment is still in-flight (HTLC locked but not yet settled), the server SHOULD respond with `402` and a `Retry-After` header indicating when the client should retry.
-		const apiKey = env.COINOS_API_KEY;
-		if (!apiKey) {
-			return new Response('Server configuration error: API key not set', { status: 500 });
-		}
-
-		console.log('[DEBUG] Verifying payment for invoice:', invoice.substring(0, 50) + '...');
-		console.log('[DEBUG] Invoice details:', {
-			paymentHash: decoded.paymentHash,
-			satoshis: decoded.satoshis,
-			timestamp: decoded.timestamp,
-			timeExpireDate: decoded.timeExpireDate,
-			currentTime: now,
-		});
-
-		const isPaid = await verifyPayment(env.COINOS_API_URL, apiKey, invoice);
-
-		console.log('[DEBUG] Payment verification result:', isPaid);
-
-		if (!isPaid) {
-			// Payment not confirmed - return 402 with PAYMENT-RESPONSE
-			const settlementResponse = createFailureSettlement('payment_not_confirmed');
-
-			return new Response(JSON.stringify({ error: 'Payment not confirmed' }), {
-				status: 402,
-				headers: {
-					'Content-Type': 'application/json',
-					'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
-				},
-			});
-		}
-
-		// Mark invoice as used (TTL: 24 hours)
-		await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
 
 		// Payment verified - return a UUID v4 with PAYMENT-RESPONSE header
-		const settlementResponse = createSuccessSettlement(invoice, decoded.paymentHash);
+		const settlementResponse = createSuccessSettlement(result.invoice, result.paymentHash);
 
-		// Generate UUID v4
-		const uuid = crypto.randomUUID();
-
-		const response = {
-			uuid: uuid,
-		};
-
-		return new Response(JSON.stringify(response), {
+		return new Response(JSON.stringify({ uuid: crypto.randomUUID() }), {
 			status: 200,
 			headers: {
 				'Content-Type': 'application/json',
@@ -280,94 +292,17 @@ async function handleBadgeChallengeEndpoint(
 
 	// STEP 2: Check payment status
 	if (!paymentSigHeader) {
-		// No payment signature - require payment (402)
 		return requirePayment(request, env, BADGE_AMOUNT_SATS);
 	}
 
 	// STEP 3: Payment signature provided - verify payment
 	try {
-		const paymentPayload = decodeBase64<X402PaymentPayload>(paymentSigHeader);
+		const result = await verifyLightningPayment(paymentSigHeader, BADGE_AMOUNT_SATS, env);
 
-		// Validate x402 version
-		if (paymentPayload.x402Version !== 2) {
-			return createErrorResponse('Unsupported x402 version', 400, 'unsupported_version');
+		// Verification failed - return the error response
+		if (result instanceof Response) {
+			return result;
 		}
-
-		// Validate payment scheme is exact
-		if (paymentPayload.accepted.scheme !== SCHEME_EXACT) {
-			return createErrorResponse('Unsupported payment scheme', 400, 'unsupported_scheme');
-		}
-
-		// Validate network is mainnet btc
-		if (paymentPayload.accepted.network !== MAINNET_BTC_NETWORK_ID) {
-			return createErrorResponse('Unsupported payment network', 400, 'unsupported_network');
-		}
-
-		// Extract Lightning-specific payload
-		const lightningPayload = paymentPayload.payload as unknown as LightningPaymentPayload;
-		const invoice = lightningPayload.invoice;
-
-		if (!invoice) {
-			return createErrorResponse('Missing invoice in payload', 400, 'missing_invoice');
-		}
-
-		// Verify `payload.invoice` matches `payload.accepted.extra.invoice` exactly
-		if (invoice !== paymentPayload.accepted.extra?.invoice) {
-			return createErrorResponse('Invoice in payload does not match accepted invoice', 400, 'invoice_mismatch');
-		}
-
-		// Decode invoice to get payment hash for dedup
-		const decoded = decodeBolt11(invoice);
-
-		// Check if invoice is expired
-		const now = Math.floor(Date.now() / 1000);
-		if (decoded.timeExpireDate < now) {
-			return createErrorResponse('Invoice expired', 402, 'invoice_expired');
-		}
-
-		// Verify correct amount (100 sats)
-		if (decoded.satoshis !== BADGE_AMOUNT_SATS) {
-			return createErrorResponse(
-				`Invalid payment amount. Expected ${BADGE_AMOUNT_SATS} sats, got ${decoded.satoshis} sats`,
-				400,
-				'invalid_amount'
-			);
-		}
-
-		// Check if invoice has already been used
-		const usedKey = `used:${decoded.paymentHash}`;
-		const alreadyUsed = await env.USED_INVOICES.get(usedKey);
-		if (alreadyUsed) {
-			return createErrorResponse('Invoice already used', 402, 'invoice_already_used');
-		}
-
-		// Verify payment with Lightning node
-		const apiKey = env.COINOS_API_KEY;
-		if (!apiKey) {
-			return new Response('Server configuration error: API key not set', { status: 500 });
-		}
-
-		console.log('[Badge] Verifying payment for invoice:', invoice.substring(0, 50) + '...');
-
-		const isPaid = await verifyPayment(env.COINOS_API_URL, apiKey, invoice);
-
-		console.log('[Badge] Payment verification result:', isPaid);
-
-		if (!isPaid) {
-			// Payment not confirmed - return 402 with PAYMENT-RESPONSE
-			const settlementResponse = createFailureSettlement('payment_not_confirmed');
-
-			return new Response(JSON.stringify({ error: 'Payment not confirmed' }), {
-				status: 402,
-				headers: {
-					'Content-Type': 'application/json',
-					'PAYMENT-RESPONSE': encodeBase64(settlementResponse),
-				},
-			});
-		}
-
-		// Mark invoice as used (TTL: 24 hours)
-		await env.USED_INVOICES.put(usedKey, 'true', { expirationTtl: 86400 });
 
 		// STEP 4: Payment verified - Award badge
 		// Get badge issuer private key from environment
@@ -410,7 +345,7 @@ async function handleBadgeChallengeEndpoint(
 		);
 
 		// Return success response immediately
-		const settlementResponse = createSuccessSettlement(invoice, decoded.paymentHash);
+		const settlementResponse = createSuccessSettlement(result.invoice, result.paymentHash);
 
 		const response = {
 			success: true,

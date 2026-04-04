@@ -1,45 +1,47 @@
 # simpl402
 
-x402 over Lightning Network の実装です。HTTP 402 (Payment Required) プロトコルを使用し、Lightning Network によるマイクロペイメントを実現します。
+An implementation of x402 over Lightning Network. Uses the HTTP 402 (Payment Required) protocol to enable micropayments via Lightning Network.
 
-## このリポジトリについて
+[日本語版はこちら](./README.ja.md)
 
-[x402](https://github.com/x402-foundation/x402) は、HTTP 402 ステータスコードを活用した支払いプロトコルです。このリポジトリでは、x402 HTTP Transport Specification v2 に準拠した API を Cloudflare Workers 上に実装しています。支払い基盤には Lightning Network (coinos.io API) を利用します。
+## About This Repository
 
-## ディレクトリ構成
+[x402](https://github.com/x402-foundation/x402) is a payment protocol that leverages the HTTP 402 status code. This repository implements a REST API compliant with the x402 HTTP Transport Specification v2, running on Cloudflare Workers. Lightning Network (via coinos.io API) is used as the payment layer.
 
-| ディレクトリ | 説明 |
+## Directory Structure
+
+| Directory | Description |
 |---|---|
-| [`nostr-api/`](./nostr-api/README.md) | メインアプリ。Cloudflare Workers 上で動作する x402 対応 REST API |
-| [`docs/`](./docs/) | 設計ドキュメント（アーキテクチャ、NIP-58、支払いスキーム仕様） |
+| [`nostr-api/`](./nostr-api/README.md) | Main app. x402-compliant REST API running on Cloudflare Workers |
+| [`docs/`](./docs/) | Design documents (architecture, NIP-58, payment scheme spec) |
 
-## クイックスタート
+## Quick Start
 
 ```bash
 cd nostr-api
 npm install
 cp .dev.vars.example .dev.vars
-# .dev.vars に coinos.io の API キーを設定
+# Set your coinos.io API key in .dev.vars
 npm run dev
 ```
 
-詳細は [`nostr-api/README.md`](./nostr-api/README.md) を参照してください。
+See [`nostr-api/README.md`](./nostr-api/README.md) for details.
 
-## 技術スタック
+## Tech Stack
 
-- **Cloudflare Workers** – サーバーレス実行環境
-- **TypeScript** – 型安全性
-- **Lightning Network** – 支払い基盤（coinos.io API）
-- **Cloudflare KV** – 使用済み invoice の重複排除
-- **x402 v2** – HTTP 支払いプロトコル
-- **NIP-58** – Nostr バッジ発行
+- **Cloudflare Workers** – Serverless runtime
+- **TypeScript** – Type safety
+- **Lightning Network** – Payment layer (coinos.io API)
+- **Cloudflare KV** – Invoice deduplication
+- **x402 v2** – HTTP payment protocol
+- **NIP-58** – Nostr badge issuance
 
-## 参考資料
+## References
 
-- [x402](https://github.com/x402-foundation/x402) – x402 プロトコル仕様
+- [x402](https://github.com/x402-foundation/x402) – x402 protocol specification
 - [x402 HTTP Transport Specification v2](https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/http.md)
 - [coinos.io API](https://coinos.io)
 
-## ライセンス
+## License
 
 MIT

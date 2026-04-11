@@ -258,5 +258,5 @@ MIT
 
 ## 参考資料
 
-- [x402 HTTP Transport Specification v2](https://github.com/coinbase/x402/blob/main/specs/transports-v2/http.md)
+- [x402 HTTP Transport Specification v2](https://github.com/x402-foundation/x402/blob/main/specs/transports-v2/http.md)
 - [coinos.io API](https://coinos.io)
